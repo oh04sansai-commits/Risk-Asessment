@@ -120,11 +120,6 @@ if 'log_data' not in st.session_state:
     st.session_state.risk_mock_data = load_risk_mock_data()
     st.session_state.edited_log = False # สถานะการแก้ไข
 
-# NEW: Session state to track the active tab, defaulting to Tab 2
-# This helps ensure the tab is restored after an explicit st.rerun()
-if 'active_tab_label' not in st.session_state:
-    st.session_state.active_tab_label = "2. บันทึกขั้นตอนการทำงาน"
-
 
 # --- ฟังก์ชันสำหรับเพิ่มแถวใหม่ (Req 1) ---
 def add_new_row():
@@ -132,9 +127,7 @@ def add_new_row():
     new_row = pd.DataFrame({col: [''] for col in REQUIRED_COLUMNS})
     st.session_state.log_data = pd.concat([st.session_state.log_data, new_row], ignore_index=True)
     st.session_state.edited_log = True # ตั้งค่าสถานะการแก้ไข
-    # NEW FIX: บังคับให้แท็บยังอยู่ที่เดิมหลัง RERUN
-    st.session_state.active_tab_label = "2. บันทึกขั้นตอนการทำงาน"
-    st.rerun() 
+    st.rerun() # ต้อง rerund เพื่อให้แสดงผลแถวที่เพิ่มใหม่ใน data_editor
 
 
 # --- ฟังก์ชันการคำนวณและการแสดงผล ---
@@ -168,26 +161,12 @@ is_edited = st.session_state.edited_log
 disabled_text = "คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก กรุณากด 💾 บันทึก ก่อน"
 disabled_state = is_edited
 
-# Define tab names and find the index of the desired active tab
-tab_labels = [
+# สร้างแท็บ 
+tab1, tab2, tab3 = st.tabs([
     "1. คู่มือการประเมินความเสี่ยง", 
     "2. บันทึกขั้นตอนการทำงาน", 
     "3. ประเมินความเสี่ยงจากการทำงาน"
-]
-
-# NEW FIX: ใช้ `index` เพื่อให้ Streamlit เปิดแท็บที่ถูกต้องเมื่อมีการ RERUN
-try:
-    initial_tab_index = tab_labels.index(st.session_state.active_tab_label)
-except ValueError:
-    initial_tab_index = 1 # Default to tab 2 if state is invalid
-
-
-# สร้างแท็บ โดยใช้ `initial_sidebar_state` (ไม่ได้ใช้ แต่เพิ่ม `key` เพื่อช่วย tracking)
-# st.tabs จะจำสถานะการเลือกแท็บโดยอัตโนมัติ ยกเว้นเมื่อถูกบังคับ rerun
-tab1, tab2, tab3 = st.tabs(
-    tab_labels, 
-    key="main_tabs" # เพิ่ม key เพื่อช่วยในการ track state 
-)
+])
 
 # --- แท็บ 2: บันทึกขั้นตอนการทำงาน-ลักษณะงาน (Editable Table) ---
 with tab2:
@@ -203,12 +182,11 @@ with tab2:
     else:
         filter_options = ['--- แสดงทั้งหมด ---']
         
-    # NEW: Add a key to selectbox to help track state.
     selected_id = st.selectbox(
         "กรองข้อมูลตามกลุ่มงาน:",
         options=filter_options,
         index=0,
-        key="log_filter_select",
+        key="log_filter_select"
     )
 
     st.markdown("### ตารางขั้นตอนการทำงาน (แก้ไข/เพิ่ม/ลบได้)")
@@ -235,15 +213,13 @@ with tab2:
         column_order=REQUIRED_COLUMNS, 
         hide_index=True,
         use_container_width=True,
-        num_rows="dynamic" 
+        num_rows="dynamic" # อนุญาตให้เพิ่ม/ลบแถวภายใน Editor (ไม่จำเป็นต้องใช้ปุ่ม + เพิ่มเติม แต่ผู้ใช้ต้องการปุ่มแยก)
     )
     
     # 4.4 จัดการการเปลี่ยนแปลง (ตรวจจับการแก้ไข/การเพิ่ม/การลบ)
     
     if not edited_df.equals(display_df):
         st.session_state.edited_log = True
-        # NEW FIX: ให้แน่ใจว่าแท็บยังอยู่ที่ Tab 2 เมื่อมีการแก้ไขในตาราง
-        st.session_state.active_tab_label = "2. บันทึกขั้นตอนการทำงาน"
         
         if selected_id == '--- แสดงทั้งหมด ---':
             # ไม่มี Filter: อัปเดตข้อมูลหลักทั้งหมดด้วย edited_df
@@ -253,7 +229,7 @@ with tab2:
             data_without_current_group = st.session_state.log_data[st.session_state.log_data['กลุ่มงาน'] != selected_id]
             st.session_state.log_data = pd.concat([data_without_current_group, edited_df], ignore_index=True)
             
-    # 4.5 ปุ่มเพิ่มแถวใหม่
+    # 4.5 ปุ่มเพิ่มแถวใหม่ (Req 1)
     st.button(
         "➕ เพิ่มแถวใหม่", 
         on_click=add_new_row, 
@@ -261,7 +237,7 @@ with tab2:
         type="secondary"
     )
 
-    # 4.6 ปุ่มบันทึกข้อมูล
+    # 4.6 ปุ่มบันทึกข้อมูล (Req 4)
     
     def save_log_data_callback():
         
@@ -289,14 +265,10 @@ with tab2:
             st.session_state.log_data = load_log_data()
             st.session_state.initial_log_data = st.session_state.log_data.copy()
             st.session_state.edited_log = False
-            # NEW FIX: ให้แน่ใจว่าแท็บยังอยู่ที่เดิมหลังจากการบันทึกและ RERUN
-            st.session_state.active_tab_label = "2. บันทึกขั้นตอนการทำงาน"
             st.rerun() 
         else:
             st.error(f"บันทึกข้อมูลล้มเหลว: {response.get('message') if response else 'API Error'}")
             st.session_state.edited_log = True
-            # หากบันทึกไม่สำเร็จ ให้สถานะแท็บยังอยู่ที่ 2
-            st.session_state.active_tab_label = "2. บันทึกขั้นตอนการทำงาน"
         
     st.button(
         "💾 บันทึกข้อมูล (Update Google Sheet)", 
