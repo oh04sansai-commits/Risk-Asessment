@@ -1,34 +1,33 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import requests # *** เพิ่ม: สำหรับการเรียก HTTP API ***
+import requests # สำหรับการเรียก HTTP API
 
 # --- การตั้งค่าเบื้องต้นของหน้า (Page Configuration) ---
-# ตั้งชื่อหน้าเว็บและไอคอน
 st.set_page_config(
     page_title="โปรแกรมประเมินความเสี่ยงจากการทำงาน",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- 0. การตั้งค่าการเชื่อมต่อ API (ต้องเปลี่ยน) ---
+# --- 0. การตั้งค่าการเชื่อมต่อ API ---
 # ID ของ Google Sheet (จาก URL ของ Sheet)
 SPREADSHEET_ID = "10HEC9q7mwhvCkov1sd8IMWFNYhXLZ7-nQj0S10tAATQ" 
-# URL ของ Google Apps Script Web App ที่ Deploy แล้ว (*** โปรดแทนที่ URL นี้ ***)
+# URL ของ Google Apps Script Web App ที่ Deploy แล้ว (URL ล่าสุดของคุณ)
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyJm3h-MaQoVL7q-cTZjawiIKmSeHgM_8W3Sj_iboGXZRXVFmOvh-XhFvgwaHv4m1s5/exec"
 LOG_SHEET_NAME = "ขั้นตอนการทำงาน-ลักษณะงาน"
-# ชื่อคีย์ใน Apps Script ที่ใช้สำหรับแมปข้อมูล
-LOG_KEYS = {
-    'รหัส (Col A)': 'id', 
-    'ขั้นตอนการทำงาน-ลักษณะงาน (Col B)': 'activity', 
-    'ตำแหน่งงาน (Col C)': 'position'
-}
 
+# *** ปรับปรุง: เปลี่ยนชื่อคอลัมน์ที่แสดงผลใน UI ให้เป็น 3 คอลัมน์ตามต้องการ ***
+LOG_KEYS = {
+    'กลุ่มงาน': 'id', # รหัส (Col A) เปลี่ยนเป็น กลุ่มงาน
+    'ขั้นตอนการทำงาน-ลักษณะงาน': 'activity', # ขั้นตอนการทำงาน-ลักษณะงาน (Col B)
+    'ตำแหน่งงาน': 'position' # ตำแหน่งงาน (Col C)
+}
 # --- 1. ฟังก์ชันการเชื่อมต่อ Google Apps Script API ---
 
 def fetch_sheet_data(action, sheet_name, data=None):
     """ฟังก์ชันหลักสำหรับเรียกใช้ Google Apps Script API"""
-    if GAS_WEB_APP_URL == "--- โปรดแทนที่ URL นี้ด้วย URL ที่ Deploy แล้ว ---":
+    if GAS_WEB_APP_URL.startswith("---"):
         st.error("กรุณาแทนที่ **GAS_WEB_APP_URL** ด้วย URL ที่ Deploy แล้วในโค้ด.")
         return None
 
@@ -50,13 +49,15 @@ def fetch_sheet_data(action, sheet_name, data=None):
                 'spreadsheetId': SPREADSHEET_ID,
                 'data': data.to_dict('records') if data is not None else []
             }
-            response = requests.post(GAS_WEB_APP_URL, json=payload)
+            # เพิ่ม timeout เพื่อป้องกันการรอนานเกินไป
+            response = requests.post(GAS_WEB_APP_URL, json=payload, timeout=60) 
 
         response.raise_for_status() # ตรวจสอบ HTTP errors (เช่น 4xx, 5xx)
         return response.json()
 
     except requests.exceptions.RequestException as e:
-        st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อ API: กรุณาตรวจสอบ URL และการ Deploy. Error: {e}")
+        # แสดง Error ที่ละเอียดขึ้น
+        st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อ API ({action}): กรุณาตรวจสอบ URL, การ Deploy และสิทธิ์เข้าถึง. Error: {e}")
         return None
     except Exception as e:
         st.error(f"เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุในการเรียก API: {e}")
@@ -74,6 +75,7 @@ def load_log_data():
             
             # ถ้าไม่มีข้อมูลในชีท หรือเกิดข้อผิดพลาดในการอ่าน (ยกเว้น Header)
             if not data_list:
+                # ใช้ชื่อคอลัมน์ใหม่ในการสร้าง DataFrame ว่าง
                 return pd.DataFrame(columns=list(LOG_KEYS.keys()))
             
             # 1. แปลงรายการพจนานุกรม (Dict List) เป็น DataFrame
@@ -87,6 +89,9 @@ def load_log_data():
             if 'rowIndex' in df.columns:
                 df = df.drop(columns=['rowIndex'])
                 
+            # 4. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับใหม่ (กลุ่มงาน, ขั้นตอนการทำงาน, ตำแหน่งงาน)
+            df = df[list(LOG_KEYS.keys())]
+            
             return df
         else:
             # ถ้าโหลดจริงล้มเหลว จะคืนค่า DataFrame ว่าง
@@ -117,7 +122,7 @@ def load_risk_mock_data():
 
 
 # --- 3. การจัดการ Session State และข้อมูลเริ่มต้น ---
-# *** โหลดข้อมูลจริงแทน Mock Data ***
+# โหลดข้อมูลจริงแทน Mock Data
 if 'log_data' not in st.session_state:
     st.session_state.log_data = load_log_data()
     st.session_state.risk_mock_data = load_risk_mock_data()
@@ -147,6 +152,7 @@ def calculate_risk_level(df):
         return color
 
     # ฟังก์ชันสำหรับจัดรูปแบบตาราง
+    # ใช้ .apply() แทน .applymap() สำหรับ Styler API ใหม่
     return df.style.applymap(
         highlight_risk, 
         subset=['ระดับความเสี่ยง (L x C)']
@@ -188,45 +194,67 @@ with tab2:
     
     current_data = st.session_state.log_data.copy()
 
-    # 5.1 Dropdown กรองข้อมูลตามรหัส
-    # ตรวจสอบว่าคอลัมน์มีอยู่จริงก่อนใช้ .unique()
-    if 'รหัส (Col A)' in current_data.columns:
-        filter_options = ['--- แสดงทั้งหมด ---'] + current_data['รหัส (Col A)'].unique().tolist()
+    # 5.1 Dropdown กรองข้อมูลตามกลุ่มงาน (รหัส Col A เดิม)
+    if 'กลุ่มงาน' in current_data.columns:
+        filter_options = ['--- แสดงทั้งหมด ---'] + current_data['กลุ่มงาน'].unique().tolist()
     else:
         filter_options = ['--- แสดงทั้งหมด ---']
         
     selected_id = st.selectbox(
-        "กรองข้อมูลตามรหัส (คอลัมน์ A):",
+        "กรองข้อมูลตามกลุ่มงาน:",
         options=filter_options,
         index=0,
         key="log_filter_select"
     )
 
-    if selected_id != '--- แสดงทั้งหมด ---' and 'รหัส (Col A)' in current_data.columns:
-        current_data = current_data[current_data['รหัส (Col A)'] == selected_id]
+    if selected_id != '--- แสดงทั้งหมด ---' and 'กลุ่มงาน' in current_data.columns:
+        current_data = current_data[current_data['กลุ่มงาน'] == selected_id]
 
     # 5.2 ตารางที่แก้ไขได้ (st.data_editor)
     st.markdown("### ตารางขั้นตอนการทำงาน (แก้ไขได้)")
     
-    # กำหนด config ให้ถูกต้องตามคอลัมน์ที่มี
+    # *** ปรับปรุง Column Config เพื่อให้ข้อความตัดคำ (Text Wrapping) ***
+    # ใช้ st.column_config.TextColumn เพื่อระบุว่าข้อมูลเป็นข้อความ และกำหนดความกว้าง
     column_config = {}
-    if 'รหัส (Col A)' in current_data.columns:
-        column_config["รหัส (Col A)"] = st.column_config.Column("รหัส (Col A)", disabled=True) 
-    if 'ขั้นตอนการทำงาน-ลักษณะงาน (Col B)' in current_data.columns:
-        column_config["ขั้นตอนการทำงาน-ลักษณะงาน (Col B)"] = st.column_config.Column("ขั้นตอนการทำงาน-ลักษณะงาน (Col B)", width="large")
-    if 'ตำแหน่งงาน (Col C)' in current_data.columns:
-        column_config["ตำแหน่งงาน (Col C)"] = st.column_config.Column("ตำแหน่งงาน (Col C)", width="medium")
-
-    edited_df = st.data_editor(
-        current_data,
-        key="log_editor",
-        column_config=column_config,
-        hide_index=True,
-        use_container_width=True,
-        num_rows="dynamic" # อนุญาตให้เพิ่มแถวใหม่ได้
+    
+    # Group (รหัส Col A)
+    column_config["กลุ่มงาน"] = st.column_config.TextColumn(
+        "กลุ่มงาน", 
+        disabled=True,
+        width="small", # กำหนดให้เล็ก
+    ) 
+    
+    # Activity (Col B)
+    column_config["ขั้นตอนการทำงาน-ลักษณะงาน"] = st.column_config.TextColumn(
+        "ขั้นตอนการทำงาน-ลักษณะงาน", 
+        width="large", # กำหนดให้ใหญ่ เพื่อให้มีพื้นที่ตัดคำ
+        # Note: Streamlit's TextColumn handles multi-line/wrapping reasonably well by default
     )
     
+    # Position (Col C)
+    column_config["ตำแหน่งงาน"] = st.column_config.TextColumn(
+        "ตำแหน่งงาน", 
+        width="medium"
+    )
+
+    # ตรวจสอบว่าคอลัมน์ที่จำเป็นอยู่ใน current_data ก่อนแสดง
+    required_cols = list(LOG_KEYS.keys())
+    if not all(col in current_data.columns for col in required_cols):
+        st.warning("โครงสร้างคอลัมน์ไม่ตรงกับที่คาดหวัง กรุณาตรวจสอบ Google Sheet.")
+        edited_df = pd.DataFrame(columns=required_cols)
+    else:
+        edited_df = st.data_editor(
+            current_data,
+            key="log_editor",
+            column_config=column_config,
+            column_order=required_cols, # จัดลำดับคอลัมน์ใหม่
+            hide_index=True,
+            use_container_width=True,
+            num_rows="dynamic" # อนุญาตให้เพิ่มแถวใหม่ได้
+        )
+    
     # 5.3 ตรวจสอบการแก้ไขและปุ่มบันทึก
+    # ตรวจสอบว่ามีการแก้ไขหรือไม่ โดยเทียบกับข้อมูลต้นฉบับ (current_data)
     if not edited_df.equals(current_data):
         st.session_state.edited_log = True
     else:
@@ -236,11 +264,11 @@ with tab2:
         # 1. ทำความสะอาดข้อมูล: ลบแถวที่เป็นค่าว่างทั้งหมด
         df_to_save = edited_df.dropna(how='all')
 
-        # 2. แปลงชื่อคอลัมน์ให้ตรงกับ LOG_KEYS ใน Apps Script
-        # ใช้เฉพาะคอลัมน์ที่อยู่ใน LOG_KEYS เพื่อป้องกันคอลัมน์ที่ไม่พึงประสงค์
-        df_to_save = df_to_save.rename(columns=LOG_KEYS)
+        # 2. แปลงชื่อคอลัมน์จากภาษาไทยกลับเป็นคีย์ API (id, activity, position)
+        reverse_rename_map = {k: v for k, v in LOG_KEYS.items()} # สร้าง map ใหม่
+        df_to_save = df_to_save.rename(columns=reverse_rename_map)
         
-        # 3. เลือกเฉพาะคอลัมน์ที่ต้องการ (id, activity, position) ตามลำดับ
+        # 3. เลือกเฉพาะคอลัมน์ที่ต้องการ (id, activity, position) ตามลำดับที่ Apps Script คาดหวัง
         columns_to_keep = list(LOG_KEYS.values())
         if not df_to_save.empty:
             df_to_save = df_to_save[columns_to_keep]
@@ -289,8 +317,6 @@ with tab3:
         risk_df = st.session_state.risk_mock_data[selected_department].copy()
         
         # แสดงตารางผลลัพธ์
-        # Streamlit ไม่รองรับการแก้ไขตารางที่ใช้ st.dataframe() โดยตรง 
-        # ดังนั้น เราจะแสดงเป็นตารางผลลัพธ์ที่คำนวณแล้ว
         st.dataframe(
             calculate_risk_level(risk_df),
             hide_index=True,
