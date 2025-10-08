@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import requests # *** เพิ่ม: สำหรับการเรียก HTTP API ***
 
 # --- การตั้งค่าเบื้องต้นของหน้า (Page Configuration) ---
 # ตั้งชื่อหน้าเว็บและไอคอน
@@ -10,33 +11,92 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 1. ฟังก์ชันโหลด/จำลองข้อมูล (Mock Data Initialization) ---
+# --- 0. การตั้งค่าการเชื่อมต่อ API (ต้องเปลี่ยน) ---
+# ID ของ Google Sheet (จาก URL ของ Sheet)
+SPREADSHEET_ID = "10HEC9q7mwhvCkov1sd8IMWFNYhXLZ7-nQj0S10tAATQ" 
+# URL ของ Google Apps Script Web App ที่ Deploy แล้ว (*** โปรดแทนที่ URL นี้ ***)
+GAS_WEB_APP_URL = "--- โปรดแทนที่ URL นี้ด้วย URL ที่ Deploy แล้ว ---"
+LOG_SHEET_NAME = "ขั้นตอนการทำงาน-ลักษณะงาน"
+# ชื่อคีย์ใน Apps Script ที่ใช้สำหรับแมปข้อมูล
+LOG_KEYS = {
+    'รหัส (Col A)': 'id', 
+    'ขั้นตอนการทำงาน-ลักษณะงาน (Col B)': 'activity', 
+    'ตำแหน่งงาน (Col C)': 'position'
+}
 
-# จำลองข้อมูลขั้นตอนการทำงาน (ชีท 'ขั้นตอนการทำงาน-ลักษณะงาน')
+# --- 1. ฟังก์ชันการเชื่อมต่อ Google Apps Script API ---
+
+def fetch_sheet_data(action, sheet_name, data=None):
+    """ฟังก์ชันหลักสำหรับเรียกใช้ Google Apps Script API"""
+    if GAS_WEB_APP_URL == "--- โปรดแทนที่ URL นี้ด้วย URL ที่ Deploy แล้ว ---":
+        st.error("กรุณาแทนที่ **GAS_WEB_APP_URL** ด้วย URL ที่ Deploy แล้วในโค้ด.")
+        return None
+
+    try:
+        if action == 'read':
+            params = {
+                'action': action,
+                'sheet': sheet_name,
+                'spreadsheetId': SPREADSHEET_ID
+            }
+            response = requests.get(GAS_WEB_APP_URL, params=params)
+        
+        elif action == 'write':
+            # POST request
+            # แปลง DataFrame เป็น List of Dicts เพื่อส่งไปยัง Apps Script
+            payload = {
+                'action': action,
+                'sheet': sheet_name,
+                'spreadsheetId': SPREADSHEET_ID,
+                'data': data.to_dict('records') if data is not None else []
+            }
+            response = requests.post(GAS_WEB_APP_URL, json=payload)
+
+        response.raise_for_status() # ตรวจสอบ HTTP errors (เช่น 4xx, 5xx)
+        return response.json()
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อ API: กรุณาตรวจสอบ URL และการ Deploy. Error: {e}")
+        return None
+    except Exception as e:
+        st.error(f"เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุในการเรียก API: {e}")
+        return None
+
+# --- 2. ฟังก์ชันโหลดข้อมูลจริง (แทนที่ Mock Data) ---
+
 def load_log_data():
-    """จำลองการโหลดข้อมูลขั้นตอนการทำงานจาก Google Sheet/DB"""
-    data = {
-        'รหัส (Col A)': ['T001', 'T002', 'T003', 'T004', 'T005'],
-        'ขั้นตอนการทำงาน-ลักษณะงาน (Col B)': [
-            'การตรวจสอบวัสดุสิ้นเปลือง', 
-            'การบันทึกบัญชีรายรับ', 
-            'การให้คำแนะนำผู้ป่วยใหม่', 
-            'การจัดทำรายงานประจำเดือน', 
-            'การจัดเก็บยาและเวชภัณฑ์'
-        ],
-        'ตำแหน่งงาน (Col C)': [
-            'เจ้าหน้าที่พัสดุ', 
-            'เจ้าหน้าที่บัญชี', 
-            'พยาบาลวิชาชีพ', 
-            'เจ้าหน้าที่บัญชี', 
-            'เภสัชกร/ผู้ช่วย'
-        ]
-    }
-    return pd.DataFrame(data)
+    """โหลดข้อมูลขั้นตอนการทำงานจริงจาก Google Sheet ผ่าน Apps Script API"""
+    with st.spinner("กำลังโหลดข้อมูลขั้นตอนการทำงานจาก Google Sheet..."):
+        response = fetch_sheet_data('read', LOG_SHEET_NAME)
+        
+        if response and response.get('status') == 'success':
+            data_list = response.get('data', [])
+            
+            # ถ้าไม่มีข้อมูลในชีท หรือเกิดข้อผิดพลาดในการอ่าน (ยกเว้น Header)
+            if not data_list:
+                return pd.DataFrame(columns=list(LOG_KEYS.keys()))
+            
+            # 1. แปลงรายการพจนานุกรม (Dict List) เป็น DataFrame
+            df = pd.DataFrame(data_list)
+            
+            # 2. แมปชื่อคีย์กลับไปเป็นชื่อคอลัมน์ภาษาไทยที่ Streamlit คาดหวัง
+            reverse_map = {v: k for k, v in LOG_KEYS.items()}
+            df = df.rename(columns=reverse_map)
+            
+            # 3. ลบคอลัมน์ที่ไม่ต้องการ (เช่น rowIndex ที่ใช้ใน Apps Script)
+            if 'rowIndex' in df.columns:
+                df = df.drop(columns=['rowIndex'])
+                
+            return df
+        else:
+            # ถ้าโหลดจริงล้มเหลว จะคืนค่า DataFrame ว่าง
+            st.warning("ไม่สามารถโหลดข้อมูลขั้นตอนการทำงานได้ (ใช้ข้อมูลว่างแทน).")
+            return pd.DataFrame(columns=list(LOG_KEYS.keys()))
 
-# จำลองข้อมูลประเมินความเสี่ยง (Mock Data for Assessment Tab)
+
+# จำลองข้อมูลประเมินความเสี่ยง (Mock Data for Assessment Tab) - ยังคงใช้ Mock Data
 def load_risk_mock_data():
-    """จำลองข้อมูลความเสี่ยงตามหน่วยงาน"""
+    """จำลองข้อมูลความเสี่ยงตามหน่วยงาน (ไม่ได้เชื่อมต่อ API)"""
     return {
         "แผนกการผลิต": pd.DataFrame({
             'กิจกรรม': ["ยกกล่องหนัก", "ใช้เครื่องจักรเจาะ"],
@@ -56,14 +116,15 @@ def load_risk_mock_data():
     }
 
 
-# --- 2. การจัดการ Session State และข้อมูลเริ่มต้น ---
+# --- 3. การจัดการ Session State และข้อมูลเริ่มต้น ---
+# *** โหลดข้อมูลจริงแทน Mock Data ***
 if 'log_data' not in st.session_state:
     st.session_state.log_data = load_log_data()
     st.session_state.risk_mock_data = load_risk_mock_data()
     st.session_state.edited_log = False
 
 
-# --- 3. ฟังก์ชันการคำนวณและการแสดงผล ---
+# --- 4. ฟังก์ชันการคำนวณและการแสดงผล ---
 def calculate_risk_level(df):
     """คำนวณระดับความเสี่ยง (L x C) และกำหนดสี"""
     if df.empty:
@@ -91,7 +152,7 @@ def calculate_risk_level(df):
         subset=['ระดับความเสี่ยง (L x C)']
     )
 
-# --- 4. โครงสร้าง UI หลัก ---
+# --- 5. โครงสร้าง UI หลัก ---
 
 # ส่วนหัวข้อ
 st.title("โปรแกรมประเมินความเสี่ยงจากการทำงาน โรงพยาบาลสันทราย")
@@ -123,12 +184,17 @@ with tab1:
 # --- แท็บ 2: บันทึกขั้นตอนการทำงาน-ลักษณะงาน (Editable Table) ---
 with tab2:
     st.header("2. บันทึกขั้นตอนการทำงาน-ลักษณะงาน")
-    st.info("รายการนี้สามารถแก้ไขได้โดยตรงในตาราง (เหมือนใน Google Sheet) และจะถูกบันทึกไว้ใน Session ของแอปฯ")
+    st.info("รายการนี้สามารถแก้ไขได้โดยตรงในตาราง (เหมือนใน Google Sheet) และจะถูกบันทึกไว้ใน Google Sheet จริงเมื่อกดบันทึก")
     
     current_data = st.session_state.log_data.copy()
 
-    # 4.1 Dropdown กรองข้อมูลตามรหัส
-    filter_options = ['--- แสดงทั้งหมด ---'] + current_data['รหัส (Col A)'].unique().tolist()
+    # 5.1 Dropdown กรองข้อมูลตามรหัส
+    # ตรวจสอบว่าคอลัมน์มีอยู่จริงก่อนใช้ .unique()
+    if 'รหัส (Col A)' in current_data.columns:
+        filter_options = ['--- แสดงทั้งหมด ---'] + current_data['รหัส (Col A)'].unique().tolist()
+    else:
+        filter_options = ['--- แสดงทั้งหมด ---']
+        
     selected_id = st.selectbox(
         "กรองข้อมูลตามรหัส (คอลัมน์ A):",
         options=filter_options,
@@ -136,70 +202,71 @@ with tab2:
         key="log_filter_select"
     )
 
-    if selected_id != '--- แสดงทั้งหมด ---':
+    if selected_id != '--- แสดงทั้งหมด ---' and 'รหัส (Col A)' in current_data.columns:
         current_data = current_data[current_data['รหัส (Col A)'] == selected_id]
 
-    # 4.2 ตารางที่แก้ไขได้ (st.data_editor)
+    # 5.2 ตารางที่แก้ไขได้ (st.data_editor)
     st.markdown("### ตารางขั้นตอนการทำงาน (แก้ไขได้)")
+    
+    # กำหนด config ให้ถูกต้องตามคอลัมน์ที่มี
+    column_config = {}
+    if 'รหัส (Col A)' in current_data.columns:
+        column_config["รหัส (Col A)"] = st.column_config.Column("รหัส (Col A)", disabled=True) 
+    if 'ขั้นตอนการทำงาน-ลักษณะงาน (Col B)' in current_data.columns:
+        column_config["ขั้นตอนการทำงาน-ลักษณะงาน (Col B)"] = st.column_config.Column("ขั้นตอนการทำงาน-ลักษณะงาน (Col B)", width="large")
+    if 'ตำแหน่งงาน (Col C)' in current_data.columns:
+        column_config["ตำแหน่งงาน (Col C)"] = st.column_config.Column("ตำแหน่งงาน (Col C)", width="medium")
+
     edited_df = st.data_editor(
         current_data,
         key="log_editor",
-        # กำหนดความกว้างของคอลัมน์ที่แก้ไขได้
-        column_config={
-            "รหัส (Col A)": st.column_config.Column(
-                "รหัส (Col A)",
-                disabled=True # คอลัมน์รหัสไม่สามารถแก้ไขได้
-            ),
-            "ขั้นตอนการทำงาน-ลักษณะงาน (Col B)": st.column_config.Column(
-                "ขั้นตอนการทำงาน-ลักษณะงาน (Col B)",
-                width="large"
-            ),
-            "ตำแหน่งงาน (Col C)": st.column_config.Column(
-                "ตำแหน่งงาน (Col C)",
-                width="medium"
-            )
-        },
+        column_config=column_config,
         hide_index=True,
         use_container_width=True,
         num_rows="dynamic" # อนุญาตให้เพิ่มแถวใหม่ได้
     )
     
-    # 4.3 ตรวจสอบการแก้ไขและปุ่มบันทึก
+    # 5.3 ตรวจสอบการแก้ไขและปุ่มบันทึก
     if not edited_df.equals(current_data):
         st.session_state.edited_log = True
     else:
         st.session_state.edited_log = False
 
     def save_log_data_callback():
-        # การรวมข้อมูลที่แก้ไขเข้ากับข้อมูลหลัก
-        # ต้องจัดการกรณีที่มีการเพิ่มแถวใหม่ด้วย
+        # 1. ทำความสะอาดข้อมูล: ลบแถวที่เป็นค่าว่างทั้งหมด
+        df_to_save = edited_df.dropna(how='all')
+
+        # 2. แปลงชื่อคอลัมน์ให้ตรงกับ LOG_KEYS ใน Apps Script
+        # ใช้เฉพาะคอลัมน์ที่อยู่ใน LOG_KEYS เพื่อป้องกันคอลัมน์ที่ไม่พึงประสงค์
+        df_to_save = df_to_save.rename(columns=LOG_KEYS)
         
-        # 1. ดึงข้อมูลหลักที่ไม่มีการกรอง
-        original_data_all = st.session_state.log_data.copy()
-        
-        # 2. จัดการข้อมูลที่ถูกแก้ไข (edited_df)
-        # เนื่องจาก st.data_editor ส่งคืนตารางที่อาจถูกกรองหรือเพิ่มแถว
-        
-        # 3. อัปเดตเฉพาะแถวที่ถูกแก้ไขในข้อมูลหลัก
-        if selected_id == '--- แสดงทั้งหมด ---':
-            # ถ้าไม่ได้กรอง: ข้อมูลใน edited_df คือข้อมูลหลักทั้งหมด (พร้อมแถวใหม่)
-            st.session_state.log_data = edited_df.dropna(how='all')
+        # 3. เลือกเฉพาะคอลัมน์ที่ต้องการ (id, activity, position) ตามลำดับ
+        columns_to_keep = list(LOG_KEYS.values())
+        if not df_to_save.empty:
+            df_to_save = df_to_save[columns_to_keep]
+
+        # 4. เรียก API เพื่อเขียนข้อมูล
+        with st.spinner("กำลังบันทึกข้อมูลขั้นตอนการทำงานไปยัง Google Sheet..."):
+            response = fetch_sheet_data('write', LOG_SHEET_NAME, df_to_save)
+
+        if response and response.get('status') == 'success':
+            st.toast("บันทึกข้อมูลขั้นตอนการทำงานเรียบร้อยแล้ว!", icon='✅')
+            # โหลดข้อมูลใหม่เพื่อยืนยันการบันทึกและอัปเดต Session State
+            st.session_state.log_data = load_log_data()
+            st.session_state.edited_log = False
+            # ต้องเรียก st.rerun() เพื่อให้ UI แสดงผลข้อมูลที่โหลดมาใหม่
+            st.rerun() 
         else:
-            # ถ้ามีการกรอง: ต้องแทนที่เฉพาะแถวที่ถูกกรองในข้อมูลหลัก
-            # (เนื่องจาก Streamlit ไม่ได้ออกแบบมาให้ทำแบบนี้โดยง่าย, เราจะทำแบบง่ายๆ)
-            st.session_state.log_data = edited_df.dropna(how='all')
-            # หมายเหตุ: ในการใช้งานจริง, ถ้ามีการกรอง, เราควรต้องใช้คีย์ ID เพื่ออัปเดตข้อมูลเดิมใน DB 
-            
-        st.session_state.edited_log = False
-        st.toast("บันทึกข้อมูลขั้นตอนการทำงานเรียบร้อยแล้ว!", icon='✅')
+            st.error(f"บันทึกข้อมูลล้มเหลว: {response.get('message') if response else 'API Error'}")
+            st.session_state.edited_log = True # ยังไม่ได้บันทึก
         
     st.button(
-        "บันทึกข้อมูล (Update Session State)", 
+        "บันทึกข้อมูล (Update Google Sheet)", 
         on_click=save_log_data_callback,
         disabled=not st.session_state.edited_log,
         type="primary"
     )
-    st.caption("ข้อมูลนี้จะถูกบันทึกไว้ชั่วคราวใน Session State จนกว่าแอปฯ จะถูกรีเซ็ต")
+    st.caption("ข้อมูลนี้จะถูกบันทึกถาวรใน Google Sheet ของคุณ")
 
 
 # --- แท็บ 3: ประเมินความเสี่ยงจากการทำงาน ---
