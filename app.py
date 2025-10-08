@@ -15,7 +15,7 @@ st.set_page_config(
 # ID ของ Google Sheet (จาก URL ของ Sheet)
 SPREADSHEET_ID = "10HEC9q7mwhvCkov1sd8IMWFNYhXLZ7-nQj0S10tAATQ" 
 # URL ของ Google Apps Script Web App ที่ Deploy แล้ว (*** โปรดแทนที่ URL นี้ ***)
-GAS_WEB_APP_URL = "--- โปรดแทนที่ URL นี้ด้วย URL ที่ Deploy แล้ว ---"
+GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx-as69Nz5nweImjexBgFN6yWbtgaSz7g6jBeZBE6c/dev"
 LOG_SHEET_NAME = "ขั้นตอนการทำงาน-ลักษณะงาน"
 # ชื่อคีย์ใน Apps Script ที่ใช้สำหรับแมปข้อมูล
 LOG_KEYS = {
