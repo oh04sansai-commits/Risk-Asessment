@@ -13,8 +13,8 @@ st.set_page_config(
 # --- 0. การตั้งค่าการเชื่อมต่อ API ---
 # ID ของ Google Sheet (จาก URL ของ Sheet)
 SPREADSHEET_ID = "10HEC9q7mwhvCkov1sd8IMWFNYhXLZ7-nQj0S10tAATQ" 
-# URL ของ Google Apps Script Web App ที่ Deploy แล้ว
-GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx-as69Nz5nweImjexBgFN6yWbtgaSz7g6jBeZBE6c/dev"
+# URL ของ Google Apps Script Web App ที่ Deploy แล้ว (ต้องลงท้ายด้วย /exec สำหรับ Production)
+GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx-as69Nz5nweImjexBgFN6yWbtgaSz7g6jBeZBE6c/exec"
 LOG_SHEET_NAME = "ขั้นตอนการทำงาน-ลักษณะงาน"
 
 # ชื่อคอลัมน์ที่แสดงผลใน UI และคีย์ API ที่เกี่ยวข้อง
@@ -93,7 +93,7 @@ def load_log_data():
         
         return df
     else:
-        st.warning("ไม่สามารถโหลดข้อมูลขั้นตอนการทำงานได้ (ใช้ข้อมูลว่างแทน).")
+        # ในกรณีที่ API ล้มเหลว ให้คืนค่า DataFrame ว่างเพื่อไม่ให้เกิด Error ในส่วน UI
         return pd.DataFrame(columns=REQUIRED_COLUMNS)
 
 
