@@ -113,6 +113,9 @@ def load_risk_mock_data():
 
 
 # --- 3. การจัดการ Session State และข้อมูลเริ่มต้น ---
+# Note: Removed @st.cache_data from load_log_data to avoid cache complexity when debugging, 
+# and added explicit st.spinner inside load_log_data to maintain user experience.
+
 if 'log_data' not in st.session_state:
     st.session_state.log_data = load_log_data()
     st.session_state.initial_log_data = st.session_state.log_data.copy() # ข้อมูลเริ่มต้นสำหรับการเปรียบเทียบ
@@ -150,12 +153,12 @@ is_edited = st.session_state.edited_log
 disabled_text = "คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก กรุณากด 💾 บันทึก ก่อน"
 disabled_state = is_edited
 
-# สร้างแท็บ 
+# สร้างแท็บ (แก้ไข: เพิ่ม key="main_tabs" เพื่อรักษาตำแหน่งของแท็บเมื่อเกิด rerun)
 tab1, tab2, tab3 = st.tabs([
     "1. คู่มือการประเมินความเสี่ยง", 
     "2. บันทึกขั้นตอนการทำงาน", 
     "3. ประเมินความเสี่ยงจากการทำงาน"
-])
+], key="main_tabs")
 
 # --- แท็บ 2: บันทึกขั้นตอนการทำงาน-ลักษณะงาน (Editable Table) ---
 with tab2:
@@ -171,6 +174,7 @@ with tab2:
     else:
         filter_options = ['--- แสดงทั้งหมด ---']
         
+    # Note: selectbox will trigger rerun and the 'key' in st.tabs will ensure the tab persists.
     selected_id = st.selectbox(
         "กรองข้อมูลตามกลุ่มงาน:",
         options=filter_options,
