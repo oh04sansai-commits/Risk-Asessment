@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-imr # สำหรับการเรียก HTTP API
+import requests # สำหรับการเรียก HTTP API
 
 # --- การตั้งค่าเบื้องต้นของหน้า (Page Configuration) ---
 st.set_page_config(
