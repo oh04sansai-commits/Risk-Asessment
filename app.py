@@ -13,7 +13,7 @@ st.set_page_config(
 # --- 0. การตั้งค่าการเชื่อมต่อ API ---
 # ID ของ Google Sheet (จาก URL ของ Sheet)
 SPREADSHEET_ID = "10HEC9q7mwhvCkov1sd8IMWFNYhXLZ7-nQj0S10tAATQ" 
-# URL ของ Google Apps Script Web App ที่ Deploy แล้ว
+# URL ของ Google Apps Script Web App ที่ Deploy แล้ว (URL ย้อนหลัง)
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyJm3h-MaQoVL7q-cTZjawiIKmSeHgM_8W3Sj_iboGXZRXVFmOvh-XhFvgwaHv4m1s5/exec"
 LOG_SHEET_NAME = "ขั้นตอนการทำงาน-ลักษณะงาน"
 
@@ -66,7 +66,6 @@ def fetch_sheet_data(action, sheet_name, data=None):
 @st.cache_data(ttl=600) # แคชข้อมูล 10 นาทีเพื่อลดการเรียก API ซ้ำ
 def load_log_data():
     """โหลดข้อมูลขั้นตอนการทำงานจริงจาก Google Sheet และกรองตามคอลัมน์ A"""
-    # NOTE: ลบ st.spinner ออกจากฟังก์ชันนี้เพื่อใช้ st.cache_data
     response = fetch_sheet_data('read', LOG_SHEET_NAME)
     
     if response and response.get('status') == 'success':
@@ -265,7 +264,6 @@ with tab2:
             st.session_state.initial_log_data = st.session_state.log_data.copy()
             st.session_state.edited_log = False
             
-            # เมื่อมีการบันทึกสำเร็จ Streamlit จะคงสถานะแท็บเดิมไว้เนื่องจากใช้ key="main_tabs"
             st.rerun() 
         else:
             st.error(f"บันทึกข้อมูลล้มเหลว: {response.get('message') if response else 'API Error'}")
