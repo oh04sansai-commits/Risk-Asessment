@@ -37,7 +37,7 @@ def fetch_sheet_data(action, sheet_name, data=None):
                 'spreadsheetId': SPREADSHEET_ID
             }
             response = requests.get(GAS_WEB_APP_URL, params=params)
-        
+       
         elif action == 'write':
             # POST request
             payload = {
@@ -64,29 +64,29 @@ def load_log_data():
     """โหลดข้อมูลขั้นตอนการทำงานจริงจาก Google Sheet และกรองตามคอลัมน์ A"""
     with st.spinner("กำลังโหลดข้อมูลขั้นตอนการทำงานจาก Google Sheet..."):
         response = fetch_sheet_data('read', LOG_SHEET_NAME)
-        
+       
         if response and response.get('status') == 'success':
             data_list = response.get('data', [])
-            
+           
             if not data_list:
                 return pd.DataFrame(columns=REQUIRED_COLUMNS)
-            
+           
             df = pd.DataFrame(data_list)
-            
+           
             # 1. แมปชื่อคีย์กลับไปเป็นชื่อคอลัมน์ภาษาไทยที่ Streamlit คาดหวัง
             reverse_map = {v: k for k, v in LOG_KEYS.items()}
             df = df.rename(columns=reverse_map)
-            
+           
             # 2. ทำความสะอาดคอลัมน์ที่ไม่ต้องการ
             if 'rowIndex' in df.columns:
                 df = df.drop(columns=['rowIndex'])
-                
+                 
             # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับใหม่
             df = df[REQUIRED_COLUMNS]
-            
+           
             # 4. การกรอง: ยึดคอลัมน์ 'กลุ่มงาน' (Col A) เป็นหลักมีมีข้อมูลในบรรทัดนั้น ๆ
             df = df[df['กลุ่มงาน'].astype(str).str.strip() != '']
-            
+           
             return df
         else:
             st.warning("ไม่สามารถโหลดข้อมูลขั้นตอนการทำงานได้ (ใช้ข้อมูลว่างแทน).")
@@ -126,15 +126,15 @@ def add_new_row():
     new_row = pd.DataFrame({col: [''] for col in REQUIRED_COLUMNS})
     st.session_state.log_data = pd.concat([st.session_state.log_data, new_row], ignore_index=True)
     st.session_state.edited_log = True # ตั้งค่าทันทีเมื่อกดเพิ่ม
-    
+   
 # --- ฟังก์ชันการคำนวณและการแสดงผล ---
 def calculate_risk_level(df):
     """คำนวณระดับความเสี่ยง (L x C) และกำหนดสี"""
     if df.empty:
         return df
-    
+   
     df['ระดับความเสี่ยง (L x C)'] = df['L'] * df['C']
-    
+   
     def highlight_risk(val):
         color = ''
         if val >= 15: color = 'background-color: #fca5a5; color: #991b1b; font-weight: bold;' # Red
@@ -169,7 +169,7 @@ tab1, tab2, tab3 = st.tabs([
 with tab2:
     st.header("2. บันทึกขั้นตอนการทำงาน-ลักษณะงาน")
     st.info("แก้ไขข้อมูลในตารางโดยตรง เพิ่ม/ลบรายการใหม่ และกด **💾 บันทึกข้อมูล** เพื่ออัปเดต Google Sheet ทันที")
-    
+   
     # 4.1 Dropdown กรองข้อมูล
     current_data_for_display = st.session_state.log_data.copy()
 
@@ -178,7 +178,7 @@ with tab2:
         filter_options = ['--- แสดงทั้งหมด ---'] + sorted(non_empty_groups[non_empty_groups != ''].tolist())
     else:
         filter_options = ['--- แสดงทั้งหมด ---']
-        
+         
     selected_id = st.selectbox(
         "กรองข้อมูลตามกลุ่มงาน:",
         options=filter_options,
@@ -187,7 +187,7 @@ with tab2:
     )
 
     st.markdown("### ตารางขั้นตอนการทำงาน (แก้ไข/เพิ่ม/ลบได้)")
-    
+   
     # 4.2 Column Config (Req 1: Fixed width/Text wrapping)
     column_config = {
         "กลุ่มงาน": st.column_config.TextColumn("กลุ่มงาน", width="small"), 
@@ -204,7 +204,7 @@ with tab2:
         # เก็บ Index ของแถวที่ถูกกรอง เพื่อให้ง่ายต่อการ Merge กลับ
         original_indices_filtered = display_df[display_df['กลุ่มงาน'] == selected_id].index
         display_df = display_df[display_df['กลุ่มงาน'] == selected_id]
-        
+         
     edited_df = st.data_editor(
         display_df,
         key="log_editor",
@@ -214,13 +214,13 @@ with tab2:
         use_container_width=True,
         num_rows="dynamic" # เปิดใช้งานปุ่มลบ (Req 3) และปุ่มเพิ่มแถวในตาราง
     )
-    
+   
     # 4.4 จัดการการเปลี่ยนแปลง (ตรวจจับการแก้ไข/การเพิ่ม/การลบ)
-    
+   
     # ตรวจสอบว่า edited_df แตกต่างจาก display_df หรือไม่
     if not edited_df.equals(display_df):
         st.session_state.edited_log = True
-        
+         
         if selected_id == '--- แสดงทั้งหมด ---':
             # ไม่มี Filter: อัปเดตข้อมูลหลักทั้งหมดด้วย edited_df
             st.session_state.log_data = edited_df.copy()
@@ -228,7 +228,7 @@ with tab2:
             # มี Filter: ต้องทำการ Merge ข้อมูลที่แก้ไข/เพิ่ม/ลบ กลับเข้าสู่ข้อมูลหลัก
             # 1. ข้อมูลหลักที่ไม่มีแถวของกลุ่มงานที่กำลังถูกแก้ไข
             data_without_current_group = st.session_state.log_data[st.session_state.log_data['กลุ่มงาน'] != selected_id]
-            
+           
             # 2. นำข้อมูลที่แก้ไข/ลบ/เพิ่มใหม่มาเชื่อมต่อ
             st.session_state.log_data = pd.concat([data_without_current_group, edited_df], ignore_index=True)
 
@@ -239,19 +239,19 @@ with tab2:
         key="add_row_btn_bottom", 
         type="secondary"
     )
-    
+   
     def save_log_data_callback():
-        
+       
         df_to_save = st.session_state.log_data.copy()
 
         # 1. ทำความสะอาดข้อมูล: ลบแถวที่เป็นค่าว่างทั้งหมด (ยึดตาม 'กลุ่มงาน')
         # แถวว่างที่ผู้ใช้เพิ่มเข้ามาแต่ไม่ได้กรอก 'กลุ่มงาน' จะถูกลบทิ้งก่อนบันทึก
         df_to_save = df_to_save[df_to_save['กลุ่มงาน'].astype(str).str.strip() != '']
-        
+       
         # 2. แปลงชื่อคอลัมน์จากภาษาไทยกลับเป็นคีย์ API
         reverse_rename_map = {k: v for k, v in LOG_KEYS.items()} 
         df_to_save = df_to_save.rename(columns=reverse_rename_map)
-        
+       
         # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับที่ Apps Script คาดหวัง
         columns_to_keep = list(LOG_KEYS.values())
         if not df_to_save.empty:
@@ -271,7 +271,7 @@ with tab2:
         else:
             st.error(f"บันทึกข้อมูลล้มเหลว: {response.get('message') if response else 'API Error'}")
             st.session_state.edited_log = True
-        
+         
     st.button(
         "💾 บันทึกข้อมูล (Update Google Sheet)", 
         on_click=save_log_data_callback,
@@ -283,11 +283,11 @@ with tab2:
 # --- แท็บ 1: คู่มือการประเมินความเสี่ยง ---
 with tab1:
     st.header("1. คู่มือการประเมินความเสี่ยงจากการทำงาน")
-    
+   
     # Req 4: เตือนเมื่อมีข้อมูลที่ยังไม่ได้บันทึก
     if disabled_state:
         st.warning(f"**{disabled_text}** ก่อนเข้าถึงแท็บนี้")
-    
+   
     st.link_button(
         "คลิก เพื่อดาวน์โหลด", 
         url="https://drive.google.com/file/d/1VQb2pw5La9NPKjLDzKr_KnucMsRy_Wjl/view?usp=sharing",
@@ -302,9 +302,9 @@ with tab3:
     # Req 4: เตือนเมื่อมีข้อมูลที่ยังไม่ได้บันทึก
     if disabled_state:
         st.warning(f"**{disabled_text}** ก่อนเข้าถึงแท็บนี้")
-        
+         
     department_options = ["--- กรุณาเลือกหน่วยงาน ---"] + list(st.session_state.risk_mock_data.keys())
-    
+   
     # ปิดการใช้งาน Selectbox หากมีข้อมูลที่ยังไม่ได้บันทึก
     selected_department = st.selectbox(
         "เลือกหน่วยงานที่ต้องการประเมิน:",
@@ -316,9 +316,9 @@ with tab3:
 
     if selected_department != "--- กรุณาเลือกหน่วยงาน ---" and not disabled_state:
         st.markdown(f"## ตารางประเมินความเสี่ยง: {selected_department}")
-        
+       
         risk_df = st.session_state.risk_mock_data[selected_department].copy()
-        
+       
         st.dataframe(
             calculate_risk_level(risk_df),
             hide_index=True,
