@@ -10,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CSS: ปรับแต่งพื้นหลังและ Radio Button ให้เหมือน Tab ---
+# --- CSS: ปรับแต่งพื้นหลังเป็นสีฟ้าอ่อน ---
 st.markdown(
     """
     <style>
@@ -19,33 +19,9 @@ st.markdown(
         background-color: #F2F8FD; 
     }
     
-    /* (ทางเลือก) ปรับสีพื้นหลังของ Sidebar */
+    /* (ทางเลือก) ปรับสีพื้นหลังของ Sidebar ให้เข้ากันเล็กน้อย หรือจะลบออกก็ได้ถ้าชอบสีเดิม */
     [data-testid="stSidebar"] {
         background-color: #E6F2FF;
-    }
-
-    /* ปรับแต่ง Radio Button ให้ดูเหมือน Menu Bar */
-    div.row-widget.stRadio > div {
-        flex-direction: row;
-        justify-content: center;
-        background-color: #ffffff;
-        padding: 10px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    div.row-widget.stRadio > div > label {
-        background-color: #f0f2f6;
-        padding: 10px 20px;
-        border-radius: 5px;
-        margin: 0 5px;
-        border: 1px solid #d1d5db;
-        cursor: pointer;
-    }
-    div.row-widget.stRadio > div > label[data-baseweb="radio"] {
-        background-color: #bfdbfe; /* สีเมื่อเลือก */
-        border-color: #3b82f6;
-        font-weight: bold;
-        color: #1e3a8a;
     }
     </style>
     """,
@@ -200,40 +176,15 @@ is_edited = st.session_state.edited_log
 disabled_text = "คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก กรุณากด 💾 บันทึก ก่อน"
 disabled_state = is_edited
 
-# --- เปลี่ยนจาก st.tabs เป็น st.radio เพื่อความเสถียรของหน้าจอ (แก้ปัญหาหน้าเด้ง) ---
-menu_options = [
+# สร้างแท็บ (ไม่สามารถปิดการใช้งานแท็บได้โดยตรง จึงต้องใช้การเตือนและปิดใช้งานเนื้อหาในแท็บ)
+tab1, tab2, tab3 = st.tabs([
     "1. คู่มือการประเมินความเสี่ยง", 
     "2. บันทึกขั้นตอนการทำงาน", 
     "3. ประเมินความเสี่ยงจากการทำงาน"
-]
-
-selected_tab = st.radio(
-    "เลือกเมนู:", 
-    menu_options, 
-    index=1, # ตั้งค่าเริ่มต้นเป็นหน้าที่ 2 (หรือ 0 หากต้องการหน้าแรก)
-    horizontal=True,
-    label_visibility="collapsed" # ซ่อน Label
-)
-
-st.markdown("---") # เส้นคั่นสวยงาม
-
-# --- แท็บ 1: คู่มือการประเมินความเสี่ยง ---
-if selected_tab == "1. คู่มือการประเมินความเสี่ยง":
-    st.header("1. คู่มือการประเมินความเสี่ยงจากการทำงาน")
-    
-    # Req 4: เตือนเมื่อมีข้อมูลที่ยังไม่ได้บันทึก
-    if disabled_state:
-        st.warning(f"**{disabled_text}** ก่อนเข้าถึงหน้านี้")
-    
-    st.link_button(
-        "คลิก เพื่อดาวน์โหลด", 
-        url="https://drive.google.com/file/d/1VQb2pw5La9NPKjLDzKr_KnucMsRy_Wjl/view?usp=sharing",
-        type="primary",
-        disabled=disabled_state
-    )
+])
 
 # --- แท็บ 2: บันทึกขั้นตอนการทำงาน-ลักษณะงาน (Editable Table) ---
-elif selected_tab == "2. บันทึกขั้นตอนการทำงาน":
+with tab2:
     st.header("2. บันทึกขั้นตอนการทำงาน-ลักษณะงาน")
     st.info("แก้ไขข้อมูลในตารางโดยตรง เพิ่ม/ลบรายการใหม่ และกด **💾 บันทึกข้อมูล** เพื่ออัปเดต Google Sheet ทันที")
     
@@ -255,12 +206,12 @@ elif selected_tab == "2. บันทึกขั้นตอนการทำ�
 
     st.markdown("### ตารางขั้นตอนการทำงาน (แก้ไข/เพิ่ม/ลบได้)")
     
-    # 4.2 Column Config
+    # 4.2 Column Config (Req 1: Fixed width/Text wrapping)
     column_config = {
         "กลุ่มงาน": st.column_config.TextColumn("กลุ่มงาน", width="small"), 
         "ขั้นตอนการทำงาน-ลักษณะงาน": st.column_config.TextColumn(
             "ขั้นตอนการทำงาน-ลักษณะงาน", 
-            width="large", 
+            width="large", # กำหนดให้ใหญ่เพื่อรองรับการตัดคำและเพิ่มบรรทัด
         ),
         "ตำแหน่งงาน": st.column_config.TextColumn("ตำแหน่งงาน", width="medium")
     }
@@ -271,49 +222,66 @@ elif selected_tab == "2. บันทึกขั้นตอนการทำ�
         # เก็บ Index ของแถวที่ถูกกรอง เพื่อให้ง่ายต่อการ Merge กลับ
         original_indices_filtered = display_df[display_df['กลุ่มงาน'] == selected_id].index
         display_df = display_df[display_df['กลุ่มงาน'] == selected_id]
-    
-    # **FIX**: ใช้ Dynamic Key (เติม selected_id) เพื่อป้องกัน State ชนกันซึ่งทำให้แอปเด้ง/รีเซ็ต
-    editor_key = f"log_editor_{selected_id}"
-
+          
     edited_df = st.data_editor(
         display_df,
-        key=editor_key, # Key เปลี่ยนตาม Filter ทำให้ไม่ Error
+        key="log_editor",
         column_config=column_config,
         column_order=REQUIRED_COLUMNS, 
         hide_index=True,
         use_container_width=True,
-        num_rows="dynamic"
+        num_rows="dynamic" # เปิดใช้งานปุ่มลบ (Req 3) และปุ่มเพิ่มแถวในตาราง
     )
     
-    # 4.4 จัดการการเปลี่ยนแปลง
+    # 4.4 จัดการการเปลี่ยนแปลง (ตรวจจับการแก้ไข/การเพิ่ม/การลบ)
+    
+    # ตรวจสอบว่า edited_df แตกต่างจาก display_df หรือไม่
     if not edited_df.equals(display_df):
         st.session_state.edited_log = True
           
         if selected_id == '--- แสดงทั้งหมด ---':
+            # ไม่มี Filter: อัปเดตข้อมูลหลักทั้งหมดด้วย edited_df
             st.session_state.log_data = edited_df.copy()
         else:
-            # Merge Logic
+            # มี Filter: ต้องทำการ Merge ข้อมูลที่แก้ไข/เพิ่ม/ลบ กลับเข้าสู่ข้อมูลหลัก
+            # 1. ข้อมูลหลักที่ไม่มีแถวของกลุ่มงานที่กำลังถูกแก้ไข
             data_without_current_group = st.session_state.log_data[st.session_state.log_data['กลุ่มงาน'] != selected_id]
+            
+            # 2. นำข้อมูลที่แก้ไข/ลบ/เพิ่มใหม่มาเชื่อมต่อ
             st.session_state.log_data = pd.concat([data_without_current_group, edited_df], ignore_index=True)
 
-    # --- REMOVED: ปุ่มเพิ่มข้อมูลด้านล่างตาราง (ถูกลบตามคำขอ) ---
+    # 4.5 ปุ่มเพิ่มข้อมูลด้านล่าง (Req 2)
+    st.button(
+        "➕ เพิ่มข้อมูลด้านล่างตาราง", 
+        on_click=add_new_row, 
+        key="add_row_btn_bottom", 
+        type="secondary"
+    )
     
     def save_log_data_callback():
+        
         df_to_save = st.session_state.log_data.copy()
+
+        # 1. ทำความสะอาดข้อมูล: ลบแถวที่เป็นค่าว่างทั้งหมด (ยึดตาม 'กลุ่มงาน')
+        # แถวว่างที่ผู้ใช้เพิ่มเข้ามาแต่ไม่ได้กรอก 'กลุ่มงาน' จะถูกลบทิ้งก่อนบันทึก
         df_to_save = df_to_save[df_to_save['กลุ่มงาน'].astype(str).str.strip() != '']
         
+        # 2. แปลงชื่อคอลัมน์จากภาษาไทยกลับเป็นคีย์ API
         reverse_rename_map = {k: v for k, v in LOG_KEYS.items()} 
         df_to_save = df_to_save.rename(columns=reverse_rename_map)
         
+        # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับที่ Apps Script คาดหวัง
         columns_to_keep = list(LOG_KEYS.values())
         if not df_to_save.empty:
             df_to_save = df_to_save[columns_to_keep]
 
+        # 4. เรียก API เพื่อเขียนข้อมูล (Overwrite: ข้อมูลที่ถูกลบไปแล้วจะไม่ถูกส่งไป)
         with st.spinner("กำลังบันทึกข้อมูลขั้นตอนการทำงานไปยัง Google Sheet..."):
             response = fetch_sheet_data('write', LOG_SHEET_NAME, df_to_save)
 
         if response and response.get('status') == 'success':
             st.toast("บันทึกข้อมูลขั้นตอนการทำงานเรียบร้อยแล้ว!", icon='✅')
+            # โหลดข้อมูลใหม่ทั้งหมดเพื่อรีเซ็ตสถานะการแก้ไข
             st.session_state.log_data = load_log_data()
             st.session_state.initial_log_data = st.session_state.log_data.copy()
             st.session_state.edited_log = False
@@ -330,16 +298,32 @@ elif selected_tab == "2. บันทึกขั้นตอนการทำ�
     )
     st.caption("ข้อมูลนี้จะถูกบันทึกถาวรใน Google Sheet ของคุณ")
 
+# --- แท็บ 1: คู่มือการประเมินความเสี่ยง ---
+with tab1:
+    st.header("1. คู่มือการประเมินความเสี่ยงจากการทำงาน")
+    
+    # Req 4: เตือนเมื่อมีข้อมูลที่ยังไม่ได้บันทึก
+    if disabled_state:
+        st.warning(f"**{disabled_text}** ก่อนเข้าถึงแท็บนี้")
+    
+    st.link_button(
+        "คลิก เพื่อดาวน์โหลด", 
+        url="https://drive.google.com/file/d/1VQb2pw5La9NPKjLDzKr_KnucMsRy_Wjl/view?usp=sharing",
+        type="primary",
+        disabled=disabled_state
+    )
+
 # --- แท็บ 3: ประเมินความเสี่ยงจากการทำงาน ---
-elif selected_tab == "3. ประเมินความเสี่ยงจากการทำงาน":
+with tab3:
     st.header("3. ประเมินความเสี่ยงจากการทำงาน")
 
     # Req 4: เตือนเมื่อมีข้อมูลที่ยังไม่ได้บันทึก
     if disabled_state:
-        st.warning(f"**{disabled_text}** ก่อนเข้าถึงหน้านี้")
+        st.warning(f"**{disabled_text}** ก่อนเข้าถึงแท็บนี้")
           
     department_options = ["--- กรุณาเลือกหน่วยงาน ---"] + list(st.session_state.risk_mock_data.keys())
     
+    # ปิดการใช้งาน Selectbox หากมีข้อมูลที่ยังไม่ได้บันทึก
     selected_department = st.selectbox(
         "เลือกหน่วยงานที่ต้องการประเมิน:",
         options=department_options,
