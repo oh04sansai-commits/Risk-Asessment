@@ -308,7 +308,7 @@ with tab1:
     
     st.link_button(
         "คลิก เพื่อดาวน์โหลด", 
-        url="https://drive.google.com/file/d/1VQb2pw5La9NPKjLDzKr_KnucMsRy_Wjl/view?usp=sharing",
+        url="https://drive.google.com/drive/folders/1pOcY8S3LdL0CBsj2KkTAbZXjK6XQcgUx",
         type="primary",
         disabled=disabled_state
     )
