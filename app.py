@@ -80,7 +80,7 @@ def fetch_sheet_data(action, sheet_name, data=None):
 
 def load_log_data():
     """โหลดข้อมูลขั้นตอนการทำงานจริงจาก Google Sheet และกรองตามคอลัมน์ A"""
-    with st.spinner("กำลังโหลดข้อมูล"):
+    with st.spinner("กำลังโหลดข้อมูลขั้นตอนการทำงานจาก Google Sheet..."):
         response = fetch_sheet_data('read', LOG_SHEET_NAME)
         
         if response and response.get('status') == 'success':
@@ -265,12 +265,12 @@ with tab2:
             df_to_save = df_to_save[columns_to_keep]
 
         # 4. เรียก API
-        with st.spinner("กำลังบันทึกข้อมูลไปยัง Google Sheet... กรุณารอสักครู่"):
+        with st.spinner("กำลังบันทึกข้อมูล...... กรุณารอสักครู่"):
             response = fetch_sheet_data('write', LOG_SHEET_NAME, df_to_save)
             
         # 5. ตรวจสอบผลลัพธ์
         if response and response.get('status') == 'success':
-            st.success("✅ บันทึกข้อมูลและอัปเดต Google Sheet เรียบร้อยแล้ว!")
+            st.success("✅ บันทึกข้อมูลและอัปเดต เรียบร้อยแล้ว!")
             
             # รีเซ็ตข้อมูลและสถานะการแก้ไข
             st.session_state.log_data = load_log_data() # โหลดใหม่จาก Sheet เพื่อความชัวร์
