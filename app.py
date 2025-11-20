@@ -286,7 +286,7 @@ with tab2:
             st.error(f"❌ บันทึกข้อมูลล้มเหลว: {error_msg}")
             st.session_state.edited_log = True
           
-    st.caption("ข้อมูลนี้จะถูกบันทึกถาวรใน Google Sheet ของคุณ")
+    # (Removed st.caption here)
 
 # --- แท็บ 1: คู่มือการประเมินความเสี่ยง ---
 with tab1:
