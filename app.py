@@ -244,12 +244,8 @@ with tab2:
             data_without_current_group = st.session_state.log_data[st.session_state.log_data['กลุ่มงาน'] != selected_id]
             st.session_state.log_data = pd.concat([data_without_current_group, edited_df], ignore_index=True)
 
-    # --- ปุ่ม Save / Update (Logic ใหม่) ---
-    if st.button(
-        "Save / Update", 
-        type="primary",
-        disabled=not is_edited
-    ):
+    # --- ฟังก์ชัน Callback สำหรับปุ่ม Save / Update (กลับไปใช้แบบ Callback เพื่อความเสถียร) ---
+    def save_log_data_callback():
         # เตรียมข้อมูลสำหรับการบันทึกจาก st.session_state.log_data ล่าสุด
         df_to_save = st.session_state.log_data.copy()
 
@@ -266,21 +262,30 @@ with tab2:
             df_to_save = df_to_save[columns_to_keep]
 
         # 4. เรียก API
-        with st.spinner("กำลังบันทึกข้อมูลขั้นตอนการทำงานไปยัง Google Sheet..."):
+        # หมายเหตุ: การเรียก API ใน Callback จะทำให้ UI รอจนกว่าจะเสร็จสิ้น
+        try:
             response = fetch_sheet_data('write', LOG_SHEET_NAME, df_to_save)
+            
+            if response and response.get('status') == 'success':
+                st.toast("บันทึกข้อมูลเรียบร้อยแล้ว!", icon='✅')
+                # รีเซ็ตข้อมูลและสถานะการแก้ไข
+                st.session_state.log_data = load_log_data() # โหลดใหม่เพื่อให้มั่นใจว่าตรงกับ Sheet
+                st.session_state.initial_log_data = st.session_state.log_data.copy()
+                st.session_state.edited_log = False
+            else:
+                error_msg = response.get('message') if response else 'API Error'
+                st.toast(f"บันทึกข้อมูลล้มเหลว: {error_msg}", icon='❌')
+                st.session_state.edited_log = True
+        except Exception as e:
+            st.toast(f"เกิดข้อผิดพลาด: {e}", icon='❌')
 
-        # 5. ตรวจสอบผลลัพธ์
-        if response and response.get('status') == 'success':
-            st.toast("บันทึกข้อมูลเรียบร้อยแล้ว!", icon='✅')
-            # รีเซ็ตข้อมูลและสถานะการแก้ไข
-            st.session_state.log_data = load_log_data() # โหลดใหม่เพื่อให้มั่นใจว่าตรงกับ Sheet
-            st.session_state.initial_log_data = st.session_state.log_data.copy()
-            st.session_state.edited_log = False
-            st.rerun() 
-        else:
-            error_msg = response.get('message') if response else 'API Error'
-            st.error(f"บันทึกข้อมูลล้มเหลว: {error_msg}")
-            st.session_state.edited_log = True
+    # --- ปุ่ม Save / Update ---
+    st.button(
+        "Save / Update", 
+        on_click=save_log_data_callback,
+        type="primary",
+        disabled=not is_edited
+    )
           
     st.caption("ข้อมูลนี้จะถูกบันทึกถาวรใน Google Sheet ของคุณ")
 
