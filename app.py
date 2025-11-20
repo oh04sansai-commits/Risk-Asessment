@@ -70,7 +70,7 @@ def fetch_sheet_data(action, sheet_name, data=None):
         return response.json()
 
     except requests.exceptions.RequestException as e:
-        st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อ API ({action}): กรุณาตรวจสอบ URL, การ Deploy และสิทธิ์เข้าถึง. Error: {e}")
+        st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อ API ({action}): กรุณาตรวจสอบ URL, การDeploy และสิทธิ์เข้าถึง. Error: {e}")
         return None
     except Exception as e:
         st.error(f"เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุในการเรียก API: {e}")
@@ -78,9 +78,25 @@ def fetch_sheet_data(action, sheet_name, data=None):
 
 # --- 2. ฟังก์ชันโหลดข้อมูลจริง ---
 
-def load_log_data():
-    """โหลดข้อมูลขั้นตอนการทำงานจริงจาก Google Sheet และกรองตามคอลัมน์ A"""
-    with st.spinner("กำลังโหลดข้อมูลขั้นตอนการทำงานจาก Google Sheet..."):
+def load_log_data(show_spinner=True):
+    """
+    โหลดข้อมูลขั้นตอนการทำงานจริงจาก Google Sheet 
+    สามารถปิดการแสดงผล st.spinner ได้เมื่อโหลดหลังการบันทึกสำเร็จ
+    """
+    
+    # ใช้ออปเจ็กต์สำหรับจัดการ context
+    if show_spinner:
+        context_manager = st.spinner("กำลังโหลดข้อมูลขั้นตอนการทำงานจาก Google Sheet...")
+    else:
+        # Dummy context manager ที่ไม่มีการแสดงผลใดๆ
+        class DummyContext:
+            def __enter__(self):
+                pass
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                pass
+        context_manager = DummyContext()
+        
+    with context_manager:
         response = fetch_sheet_data('read', LOG_SHEET_NAME)
         
         if response and response.get('status') == 'success':
@@ -132,7 +148,7 @@ def load_risk_mock_data():
 
 # --- 3. การจัดการ Session State และข้อมูลเริ่มต้น ---
 if 'log_data' not in st.session_state:
-    st.session_state.log_data = load_log_data()
+    st.session_state.log_data = load_log_data() # ใช้ค่า Default: show_spinner=True
     st.session_state.initial_log_data = st.session_state.log_data.copy() # ข้อมูลเริ่มต้นสำหรับการเปรียบเทียบ
     st.session_state.risk_mock_data = load_risk_mock_data()
     st.session_state.edited_log = False
@@ -273,7 +289,8 @@ with tab2:
             st.success("✅ บันทึกข้อมูลและอัปเดต เรียบร้อยแล้ว!")
             
             # รีเซ็ตข้อมูลและสถานะการแก้ไข
-            st.session_state.log_data = load_log_data() # โหลดใหม่จาก Sheet เพื่อความชัวร์
+            # **แก้ไขตรงนี้:** เรียก load_log_data(show_spinner=False) เพื่อไม่ให้แสดงข้อความโหลด
+            st.session_state.log_data = load_log_data(show_spinner=False) 
             st.session_state.initial_log_data = st.session_state.log_data.copy()
             st.session_state.edited_log = False
             
