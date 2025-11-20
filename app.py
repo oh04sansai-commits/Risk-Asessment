@@ -250,13 +250,7 @@ with tab2:
             # 2. นำข้อมูลที่แก้ไข/ลบ/เพิ่มใหม่มาเชื่อมต่อ
             st.session_state.log_data = pd.concat([data_without_current_group, edited_df], ignore_index=True)
 
-    # 4.5 ปุ่มเพิ่มข้อมูลด้านล่าง (Req 2)
-    st.button(
-        "➕ เพิ่มข้อมูลด้านล่างตาราง", 
-        on_click=add_new_row, 
-        key="add_row_btn_bottom", 
-        type="secondary"
-    )
+    # (ลบปุ่มเพิ่มข้อมูลด้านล่างตารางออกแล้วตามที่ขอ)
     
     def save_log_data_callback():
         
