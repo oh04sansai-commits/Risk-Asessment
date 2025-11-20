@@ -86,7 +86,8 @@ def load_log_data(show_spinner=True):
     
     # ใช้ออปเจ็กต์สำหรับจัดการ context
     if show_spinner:
-        context_manager = st.spinner("กำลังโหลดข้อมูลขั้นตอนการทำงานจาก Google Sheet...")
+        # เปลี่ยนข้อความแสดงผลตอนโหลดหน้าเพจเป็น "Loading"
+        context_manager = st.spinner("Loading")
     else:
         # Dummy context manager ที่ไม่มีการแสดงผลใดๆ
         class DummyContext:
@@ -148,7 +149,7 @@ def load_risk_mock_data():
 
 # --- 3. การจัดการ Session State และข้อมูลเริ่มต้น ---
 if 'log_data' not in st.session_state:
-    st.session_state.log_data = load_log_data() # ใช้ค่า Default: show_spinner=True
+    st.session_state.log_data = load_log_data() # ใช้ค่า Default: show_spinner=True (จะแสดง "Loading")
     st.session_state.initial_log_data = st.session_state.log_data.copy() # ข้อมูลเริ่มต้นสำหรับการเปรียบเทียบ
     st.session_state.risk_mock_data = load_risk_mock_data()
     st.session_state.edited_log = False
@@ -202,7 +203,8 @@ tab1, tab2, tab3 = st.tabs([
 # --- แท็บ 2: บันทึกขั้นตอนการทำงาน-ลักษณะงาน (Editable Table) ---
 with tab2:
     st.header("2. บันทึกขั้นตอนการทำงาน-ลักษณะงาน")
-    st.info("แก้ไขข้อมูลในตารางโดยตรง เพิ่ม/ลบรายการใหม่ และกด **Save / Update** เพื่ออัปเดต Google Sheet ทันที")
+    # แก้ไขข้อความตามที่ผู้ใช้ร้องขอ
+    st.info("แก้ไขข้อมูลในตารางโดยตรง เพิ่ม/ลบรายการใหม่ และกด **Save / Update** เพื่ออัปเดตข้อมูล")
     
     # 4.1 Dropdown กรองข้อมูล
     current_data_for_display = st.session_state.log_data.copy()
@@ -289,7 +291,7 @@ with tab2:
             st.success("✅ บันทึกข้อมูลและอัปเดต เรียบร้อยแล้ว!")
             
             # รีเซ็ตข้อมูลและสถานะการแก้ไข
-            # **แก้ไขตรงนี้:** เรียก load_log_data(show_spinner=False) เพื่อไม่ให้แสดงข้อความโหลด
+            # เรียก load_log_data(show_spinner=False) เพื่อไม่ให้แสดงข้อความโหลด
             st.session_state.log_data = load_log_data(show_spinner=False) 
             st.session_state.initial_log_data = st.session_state.log_data.copy()
             st.session_state.edited_log = False
