@@ -173,10 +173,10 @@ st.subheader("Risk Assessment Program")
 
 # ตรวจสอบสถานะการแก้ไขเพื่อใช้ในการปิดการใช้งานแท็บอื่น
 is_edited = st.session_state.edited_log
-disabled_text = "คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก กรุณากด 💾 บันทึก ก่อน"
+disabled_text = "คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก กรุณากด Save / Update ก่อน"
 disabled_state = is_edited
 
-# สร้างแท็บ (ไม่สามารถปิดการใช้งานแท็บได้โดยตรง จึงต้องใช้การเตือนและปิดใช้งานเนื้อหาในแท็บ)
+# สร้างแท็บ
 tab1, tab2, tab3 = st.tabs([
     "1. คู่มือการประเมินความเสี่ยง", 
     "2. บันทึกขั้นตอนการทำงาน", 
@@ -186,7 +186,7 @@ tab1, tab2, tab3 = st.tabs([
 # --- แท็บ 2: บันทึกขั้นตอนการทำงาน-ลักษณะงาน (Editable Table) ---
 with tab2:
     st.header("2. บันทึกขั้นตอนการทำงาน-ลักษณะงาน")
-    st.info("แก้ไขข้อมูลในตารางโดยตรง เพิ่ม/ลบรายการใหม่ และกด **💾 บันทึกข้อมูล** เพื่ออัปเดต Google Sheet ทันที")
+    st.info("แก้ไขข้อมูลในตารางโดยตรง เพิ่ม/ลบรายการใหม่ และกด **Save / Update** เพื่ออัปเดต Google Sheet ทันที")
     
     # 4.1 Dropdown กรองข้อมูล
     current_data_for_display = st.session_state.log_data.copy()
@@ -206,12 +206,12 @@ with tab2:
 
     st.markdown("### ตารางขั้นตอนการทำงาน (แก้ไข/เพิ่ม/ลบได้)")
     
-    # 4.2 Column Config (Req 1: Fixed width/Text wrapping)
+    # 4.2 Column Config
     column_config = {
         "กลุ่มงาน": st.column_config.TextColumn("กลุ่มงาน", width="small"), 
         "ขั้นตอนการทำงาน-ลักษณะงาน": st.column_config.TextColumn(
             "ขั้นตอนการทำงาน-ลักษณะงาน", 
-            width="large", # กำหนดให้ใหญ่เพื่อรองรับการตัดคำและเพิ่มบรรทัด
+            width="large", 
         ),
         "ตำแหน่งงาน": st.column_config.TextColumn("ตำแหน่งงาน", width="medium")
     }
@@ -230,73 +230,65 @@ with tab2:
         column_order=REQUIRED_COLUMNS, 
         hide_index=True,
         use_container_width=True,
-        num_rows="dynamic" # เปิดใช้งานปุ่มลบ (Req 3) และปุ่มเพิ่มแถวในตาราง
+        num_rows="dynamic"
     )
     
     # 4.4 จัดการการเปลี่ยนแปลง (ตรวจจับการแก้ไข/การเพิ่ม/การลบ)
-    
-    # ตรวจสอบว่า edited_df แตกต่างจาก display_df หรือไม่
     if not edited_df.equals(display_df):
         st.session_state.edited_log = True
           
         if selected_id == '--- แสดงทั้งหมด ---':
-            # ไม่มี Filter: อัปเดตข้อมูลหลักทั้งหมดด้วย edited_df
             st.session_state.log_data = edited_df.copy()
         else:
             # มี Filter: ต้องทำการ Merge ข้อมูลที่แก้ไข/เพิ่ม/ลบ กลับเข้าสู่ข้อมูลหลัก
-            # 1. ข้อมูลหลักที่ไม่มีแถวของกลุ่มงานที่กำลังถูกแก้ไข
             data_without_current_group = st.session_state.log_data[st.session_state.log_data['กลุ่มงาน'] != selected_id]
-            
-            # 2. นำข้อมูลที่แก้ไข/ลบ/เพิ่มใหม่มาเชื่อมต่อ
             st.session_state.log_data = pd.concat([data_without_current_group, edited_df], ignore_index=True)
 
-    # (ลบปุ่มเพิ่มข้อมูลด้านล่างตารางออกแล้วตามที่ขอ)
-    
-    def save_log_data_callback():
-        
+    # --- ปุ่ม Save / Update (Logic ใหม่) ---
+    if st.button(
+        "Save / Update", 
+        type="primary",
+        disabled=not is_edited
+    ):
+        # เตรียมข้อมูลสำหรับการบันทึกจาก st.session_state.log_data ล่าสุด
         df_to_save = st.session_state.log_data.copy()
 
-        # 1. ทำความสะอาดข้อมูล: ลบแถวที่เป็นค่าว่างทั้งหมด (ยึดตาม 'กลุ่มงาน')
-        # แถวว่างที่ผู้ใช้เพิ่มเข้ามาแต่ไม่ได้กรอก 'กลุ่มงาน' จะถูกลบทิ้งก่อนบันทึก
+        # 1. Clean data: ลบแถวที่ไม่มีกลุ่มงาน
         df_to_save = df_to_save[df_to_save['กลุ่มงาน'].astype(str).str.strip() != '']
         
-        # 2. แปลงชื่อคอลัมน์จากภาษาไทยกลับเป็นคีย์ API
+        # 2. Rename columns ให้ตรงกับ API
         reverse_rename_map = {k: v for k, v in LOG_KEYS.items()} 
         df_to_save = df_to_save.rename(columns=reverse_rename_map)
         
-        # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับที่ Apps Script คาดหวัง
+        # 3. Select columns
         columns_to_keep = list(LOG_KEYS.values())
         if not df_to_save.empty:
             df_to_save = df_to_save[columns_to_keep]
 
-        # 4. เรียก API เพื่อเขียนข้อมูล (Overwrite: ข้อมูลที่ถูกลบไปแล้วจะไม่ถูกส่งไป)
+        # 4. เรียก API
         with st.spinner("กำลังบันทึกข้อมูลขั้นตอนการทำงานไปยัง Google Sheet..."):
             response = fetch_sheet_data('write', LOG_SHEET_NAME, df_to_save)
 
+        # 5. ตรวจสอบผลลัพธ์
         if response and response.get('status') == 'success':
-            st.toast("บันทึกข้อมูลขั้นตอนการทำงานเรียบร้อยแล้ว!", icon='✅')
-            # โหลดข้อมูลใหม่ทั้งหมดเพื่อรีเซ็ตสถานะการแก้ไข
-            st.session_state.log_data = load_log_data()
+            st.toast("บันทึกข้อมูลเรียบร้อยแล้ว!", icon='✅')
+            # รีเซ็ตข้อมูลและสถานะการแก้ไข
+            st.session_state.log_data = load_log_data() # โหลดใหม่เพื่อให้มั่นใจว่าตรงกับ Sheet
             st.session_state.initial_log_data = st.session_state.log_data.copy()
             st.session_state.edited_log = False
             st.rerun() 
         else:
-            st.error(f"บันทึกข้อมูลล้มเหลว: {response.get('message') if response else 'API Error'}")
+            error_msg = response.get('message') if response else 'API Error'
+            st.error(f"บันทึกข้อมูลล้มเหลว: {error_msg}")
             st.session_state.edited_log = True
           
-    st.button(
-        "💾 บันทึกข้อมูล (Update Google Sheet)", 
-        on_click=save_log_data_callback,
-        disabled=not is_edited,
-        type="primary"
-    )
     st.caption("ข้อมูลนี้จะถูกบันทึกถาวรใน Google Sheet ของคุณ")
 
 # --- แท็บ 1: คู่มือการประเมินความเสี่ยง ---
 with tab1:
     st.header("1. คู่มือการประเมินความเสี่ยงจากการทำงาน")
     
-    # Req 4: เตือนเมื่อมีข้อมูลที่ยังไม่ได้บันทึก
+    # เตือนเมื่อมีข้อมูลที่ยังไม่ได้บันทึก
     if disabled_state:
         st.warning(f"**{disabled_text}** ก่อนเข้าถึงแท็บนี้")
     
@@ -311,7 +303,7 @@ with tab1:
 with tab3:
     st.header("3. ประเมินความเสี่ยงจากการทำงาน")
 
-    # Req 4: เตือนเมื่อมีข้อมูลที่ยังไม่ได้บันทึก
+    # เตือนเมื่อมีข้อมูลที่ยังไม่ได้บันทึก
     if disabled_state:
         st.warning(f"**{disabled_text}** ก่อนเข้าถึงแท็บนี้")
           
