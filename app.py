@@ -203,8 +203,6 @@ tab1, tab2, tab3 = st.tabs([
 # --- แท็บ 2: บันทึกขั้นตอนการทำงาน-ลักษณะงาน (Editable Table) ---
 with tab2:
     st.header("2. บันทึกขั้นตอนการทำงาน-ลักษณะงาน")
-    # แก้ไขข้อความตามที่ผู้ใช้ร้องขอ
-    st.info("แก้ไขข้อมูลในตารางโดยตรง เพิ่ม/ลบรายการใหม่ และกด **Save / Update** เพื่ออัปเดตข้อมูล")
     
     # 4.1 Dropdown กรองข้อมูล
     current_data_for_display = st.session_state.log_data.copy()
@@ -223,6 +221,9 @@ with tab2:
     )
 
     st.markdown("### ตารางขั้นตอนการทำงาน (แก้ไข/เพิ่ม/ลบได้)")
+    
+    # NEW LOCATION: ย้ายข้อความมาไว้ที่นี่และใช้ st.markdown พร้อมกำหนดขนาดตัวอักษร
+    st.markdown('<p style="font-size: 16px;">แก้ไขข้อมูลในตารางโดยตรง เพิ่ม/ลบรายการใหม่ และกด <strong>Save / Update</strong> เพื่ออัปเดตข้อมูล</p>', unsafe_allow_html=True)
     
     # 4.2 Column Config
     column_config = {
