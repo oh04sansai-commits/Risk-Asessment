@@ -80,7 +80,7 @@ def fetch_sheet_data(action, sheet_name, data=None):
 
 def load_log_data():
     """โหลดข้อมูลขั้นตอนการทำงานจริงจาก Google Sheet และกรองตามคอลัมน์ A"""
-    with st.spinner("กำลังโหลดข้อมูลขั้นตอนการทำงานจาก Google Sheet..."):
+    with st.spinner("กำลังโหลดข้อมูล"):
         response = fetch_sheet_data('read', LOG_SHEET_NAME)
         
         if response and response.get('status') == 'success':
