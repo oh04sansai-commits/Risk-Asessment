@@ -290,7 +290,7 @@ with tab2:
         # 1. Clean data: ลบแถวที่ไม่มีกลุ่มงาน
         df_to_save = df_to_save[df_to_save['กลุ่มงาน'].astype(str).str.strip() != '']
         
-        # 2. Add Update Timestamp (NEW: ใช้ Timezone ไทย)
+        # 2. Add Update Timestamp (ใช้ Timezone ไทย)
         # เพิ่มวันที่และเวลาที่บันทึกข้อมูลล่าสุด
         bangkok_tz = pytz.timezone('Asia/Bangkok')
         current_timestamp = datetime.now(bangkok_tz).strftime("%Y-%m-%d %H:%M:%S")
