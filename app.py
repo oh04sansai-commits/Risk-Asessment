@@ -171,7 +171,7 @@ if 'log_data' not in st.session_state:
     st.session_state.initial_log_data = st.session_state.log_data.copy() # ข้อมูลเริ่มต้นสำหรับการเปรียบเทียบ
     st.session_state.risk_mock_data = load_risk_mock_data()
     st.session_state.edited_log = False
-
+# **NOTE:** โค้ดเวอร์ชันนี้ไม่มี st.session_state.selected_group ทำให้ตัวกรองจะเด้งเมื่อ Rerun
 
 # --- ฟังก์ชันสำหรับเพิ่มแถวใหม่ ---
 def add_new_row():
@@ -231,10 +231,11 @@ with tab2:
     else:
         filter_options = ['--- แสดงทั้งหมด ---']
           
+    # **NOTE:** ในเวอร์ชันนี้ index ถูก hardcode เป็น 0 ทำให้ค่าตัวกรองจะเด้งกลับไปที่ "แสดงทั้งหมด" เสมอ
     selected_id = st.selectbox(
         "กรองข้อมูลตามกลุ่มงาน:",
         options=filter_options,
-        index=0,
+        index=0, # นี่คือสาเหตุที่ตัวกรองเด้งกลับไปที่ตำแหน่งแรกเสมอ
         key="log_filter_select"
     )
 
@@ -330,6 +331,8 @@ with tab2:
             st.session_state.log_data = load_log_data(show_spinner=False) 
             st.session_state.initial_log_data = st.session_state.log_data.copy()
             st.session_state.edited_log = False
+            
+            # รักษาค่าตัวกรองเดิมไว้ (เนื่องจากไม่ได้บันทึก state ตัวกรองไว้ในเวอร์ชันนี้ มันจะเด้งกลับไปที่ index=0)
             
             # รอสักครู่แล้ว Rerun เพื่อรีเฟรชหน้าจอ
             import time
