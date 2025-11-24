@@ -110,6 +110,14 @@ def load_log_data(show_spinner=True):
             
             df = pd.DataFrame(data_list)
             
+            # --- FIX: Ensure all required API keys are present before renaming ---
+            api_keys_to_check = list(LOG_KEYS.values())
+            for api_key in api_keys_to_check:
+                if api_key not in df.columns:
+                    # Initialize missing column with empty string to avoid KeyError
+                    df[api_key] = '' 
+            # -------------------------------------------------------------------
+            
             # 1. แมปชื่อคีย์กลับไปเป็นชื่อคอลัมน์ภาษาไทยที่ Streamlit คาดหวัง
             reverse_map = {v: k for k, v in LOG_KEYS.items()}
             df = df.rename(columns=reverse_map)
@@ -118,8 +126,8 @@ def load_log_data(show_spinner=True):
             if 'rowIndex' in df.columns:
                 df = df.drop(columns=['rowIndex'])
                   
-            # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับใหม่
-            df = df[REQUIRED_COLUMNS]
+            # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับใหม่ (This is now safe)
+            df = df[REQUIRED_COLUMNS] 
             
             # 4. การกรอง: ยึดคอลัมน์ 'กลุ่มงาน' (Col A) เป็นหลักมีมีข้อมูลในบรรทัดนั้น ๆ
             df = df[df['กลุ่มงาน'].astype(str).str.strip() != '']
@@ -224,7 +232,7 @@ with tab2:
 
     st.markdown("### ตารางขั้นตอนการทำงาน (แก้ไข/เพิ่ม/ลบได้)")
     
-    # NEW LOCATION: ย้ายข้อความมาไว้ที่นี่และใช้ st.markdown พร้อมกำหนดขนาดตัวอักษร
+    # แสดงคำแนะนำการใช้งาน
     st.markdown('<p style="font-size: 16px;">แก้ไขข้อมูลในตารางโดยตรง เพิ่ม/ลบรายการใหม่ และกด <strong>Save / Update</strong> เพื่ออัปเดตข้อมูล</p>', unsafe_allow_html=True)
     
     # 4.2 Column Config
@@ -235,8 +243,8 @@ with tab2:
             width="large", 
         ),
         "ตำแหน่งงาน": st.column_config.TextColumn("ตำแหน่งงาน", width="medium"),
-        # NEW: กำหนดคอลัมน์อัพเดทล่าสุดให้อ่านได้อย่างเดียว (disabled)
-        "อัพเดทล่าสุด": st.column_config.TextColumn("อัพเดทล่าสุด", width="medium", disabled=True) 
+        # NEW: กำหนดคอลัมน์อัพเดทล่าสุดให้อ่านได้อย่างเดียวและใช้ width="small"
+        "อัพเดทล่าสุด": st.column_config.TextColumn("อัพเดทล่าสุด", width="small", disabled=True) 
     }
 
     # 4.3 กรองข้อมูลที่จะแสดงผลใน Editor
@@ -269,7 +277,7 @@ with tab2:
             st.session_state.log_data = pd.concat([data_without_current_group, edited_df], ignore_index=True)
 
     # --- ปุ่ม Save / Update (แก้ไขใหม่ให้ทำงานได้จริง) ---
-    # NEW: ลบ disabled ออก เพื่อให้ปุ่มใช้งานได้ตลอดเวลา
+    # ปุ่มใช้งานได้ตลอดเวลา
     if st.button("Save / Update", type="primary"): 
         
         # เตรียมข้อมูลสำหรับการบันทึกจาก st.session_state.log_data ล่าสุด (ซึ่งอัปเดตแล้ว)
@@ -281,6 +289,8 @@ with tab2:
         # 2. Add Update Timestamp (NEW)
         # เพิ่มวันที่และเวลาที่บันทึกข้อมูลล่าสุด
         current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # อัปเดตคอลัมน์ 'อัพเดทล่าสุด' ในข้อมูลที่จะบันทึกทั้งหมด
         df_to_save['อัพเดทล่าสุด'] = current_timestamp 
         
         # 3. Rename columns ให้ตรงกับ API
@@ -298,7 +308,7 @@ with tab2:
             
         # 6. ตรวจสอบผลลัพธ์
         if response and response.get('status') == 'success':
-            st.success("✅ บันทึกข้อมูลและอัปเดต เรียบร้อยแล้ว! (Timestamp ถูกบันทึกแล้ว)")
+            st.success(f"✅ บันทึกข้อมูลและอัปเดต เรียบร้อยแล้ว! (อัปเดตล่าสุด: {current_timestamp})")
             
             # รีเซ็ตข้อมูลและสถานะการแก้ไข
             # เรียก load_log_data(show_spinner=False) เพื่อไม่ให้แสดงข้อความโหลด
@@ -315,8 +325,6 @@ with tab2:
             st.error(f"❌ บันทึกข้อมูลล้มเหลว: {error_msg}")
             st.session_state.edited_log = True
           
-    # (Removed st.caption here)
-
 # --- แท็บ 1: คู่มือการประเมินความเสี่ยง ---
 with tab1:
     st.header("1. คู่มือการประเมินความเสี่ยงจากการทำงาน")
