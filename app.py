@@ -219,6 +219,7 @@ with tab2:
     # ดึงค่ากลุ่มงานที่ไม่ว่างมาแสดงในตัวเลือก (แต่ในตารางจะแสดงทั้งหมด)
     if 'กลุ่มงาน' in current_data_for_display.columns:
         non_empty_groups = current_data_for_display['กลุ่มงาน'].astype(str).str.strip().unique()
+        # กรองค่าว่างออกจากตัวเลือก Dropdown
         valid_groups = [g for g in non_empty_groups if g and g.lower() != 'nan' and g.lower() != 'none']
         filter_options = ['--- แสดงทั้งหมด ---'] + sorted(valid_groups)
     else:
@@ -291,7 +292,7 @@ with tab2:
         # เตรียมข้อมูลสำหรับการบันทึก
         df_to_save = st.session_state.log_data.copy()
 
-        # 1. แก้ไขจุดสำคัญ: ไม่ลบแถวที่ 'กลุ่มงาน' ว่าง แต่จะแทนค่า None เป็น ""
+        # 1. แก้ไขจุดสำคัญ: แทนค่าว่างด้วย "" และแปลงเป็น String เพื่อความปลอดภัยในการส่ง JSON
         df_to_save = df_to_save.fillna("")
         
         # 2. เพิ่ม Timestamp (Col D) อัตโนมัติเมื่อกดปุ่ม
@@ -303,10 +304,12 @@ with tab2:
         reverse_rename_map = {k: v for k, v in LOG_KEYS.items()} 
         df_to_save = df_to_save.rename(columns=reverse_rename_map)
         
-        # 4. Select columns
+        # 4. Select columns และตรวจสอบให้แน่ใจว่าแปลงเป็น String ทั้งหมดก่อนส่ง
         columns_to_keep = list(LOG_KEYS.values())
         if not df_to_save.empty:
             df_to_save = df_to_save[columns_to_keep]
+            # **สำคัญมาก**: แปลงเป็น string ทั้งหมดเพื่อป้องกัน error จาก format วันที่หรือตัวเลข
+            df_to_save = df_to_save.astype(str)
 
         # 5. เรียก API
         with st.spinner("กำลังบันทึกข้อมูล...... กรุณารอสักครู่"):
