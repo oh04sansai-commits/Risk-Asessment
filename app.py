@@ -46,7 +46,8 @@ LOG_KEYS = {
 }
 
 # กำหนดให้เฉพาะคอลัมน์ที่ต้องการแสดงผลและแก้ไขได้เท่านั้น
-REQUIRED_COLUMNS = ['กลุ่มงาน', 'ขั้นตอนการทำงาน-ลักษณะงาน', 'ตำแหน่งงาน'] 
+# IMPORTANT: เพิ่ม 'อัพเดทล่าสุด' เข้ามา เพื่อให้ข้อมูลถูกโหลดจาก Sheet และแสดงผลในตาราง
+REQUIRED_COLUMNS = ['กลุ่มงาน', 'ขั้นตอนการทำงาน-ลักษณะงาน', 'ตำแหน่งงาน', 'อัพเดทล่าสุด'] 
 
 # --- 1. ฟังก์ชันการเชื่อมต่อ Google Apps Script API ---
 
@@ -133,7 +134,7 @@ def load_log_data(show_spinner=True):
             if 'rowIndex' in df.columns:
                 df = df.drop(columns=['rowIndex'])
                   
-            # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับใหม่ (ตอนนี้มีแค่ 3 คอลัมน์หลัก)
+            # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับใหม่ (ตอนนี้รวม 'อัพเดทล่าสุด' ด้วย)
             df = df[REQUIRED_COLUMNS] 
             
             # 4. การกรอง: ยึดคอลัมน์ 'กลุ่มงาน' (Col A) เป็นหลักมีมีข้อมูลในบรรทัดนั้น ๆ
@@ -242,7 +243,7 @@ with tab2:
     # แสดงคำแนะนำการใช้งาน
     st.markdown('<p style="font-size: 16px;">แก้ไขข้อมูลในตารางโดยตรง เพิ่ม/ลบรายการใหม่ และกด <strong>Save / Update</strong> เพื่ออัปเดตข้อมูล</p>', unsafe_allow_html=True)
     
-    # กำหนดค่าคอลัมน์ (มีเพียง 3 คอลัมน์หลักที่แสดง)
+    # กำหนดค่าคอลัมน์ (เพิ่ม 'อัพเดทล่าสุด' และทำให้เป็นคอลัมน์อ่านอย่างเดียว)
     column_config = {
         "กลุ่มงาน": st.column_config.TextColumn("กลุ่มงาน", width="small"), 
         "ขั้นตอนการทำงาน-ลักษณะงาน": st.column_config.TextColumn(
@@ -250,6 +251,13 @@ with tab2:
             width="large", 
         ),
         "ตำแหน่งงาน": st.column_config.TextColumn("ตำแหน่งงาน", width="medium"),
+        # NEW: เพิ่มคอลัมน์วันที่อัปเดต (อ่านอย่างเดียว)
+        "อัพเดทล่าสุด": st.column_config.DatetimeColumn(
+            "อัพเดทล่าสุด (Col D)", 
+            format="YYYY-MM-DD HH:mm:ss", 
+            width="medium",
+            disabled=True # ไม่อนุญาตให้แก้ไขใน UI
+        ),
     }
 
     # 4.3 กรองข้อมูลที่จะแสดงผลใน Editor
@@ -263,7 +271,7 @@ with tab2:
         display_df,
         key="log_editor",
         column_config=column_config,
-        column_order=REQUIRED_COLUMNS, # ใช้ REQUIRED_COLUMNS ที่ไม่มี 'อัพเดทล่าสุด'
+        column_order=REQUIRED_COLUMNS, # REQUIRED_COLUMNS ตอนนี้รวม 'อัพเดทล่าสุด' แล้ว
         hide_index=True,
         use_container_width=True,
         num_rows="dynamic"
@@ -296,7 +304,8 @@ with tab2:
         current_timestamp = datetime.now(bangkok_tz).strftime("%Y-%m-%d %H:%M:%S")
         
         # อัปเดตคอลัมน์ 'อัพเดทล่าสุด' ในข้อมูลที่จะบันทึกทั้งหมด
-        # เนื่องจากคอลัมน์นี้ไม่มีใน st.session_state.log_data จึงต้องถูกสร้างขึ้นมาใหม่ที่นี่
+        # ตอนนี้คอลัมน์นี้ถูกรวมอยู่ใน df_to_save แล้วจากการอัปเดต REQUIRED_COLUMNS 
+        # ดังนั้นการกำหนดค่านี้จะอัปเดตค่าของแถวทั้งหมด
         df_to_save['อัพเดทล่าสุด'] = current_timestamp 
         
         # 3. Rename columns ให้ตรงกับ API
@@ -309,6 +318,11 @@ with tab2:
         if not df_to_save.empty:
             df_to_save = df_to_save[columns_to_keep]
 
+        # --- Debugging check ---
+        # หากวันที่ยังไม่ขึ้นใน Google Sheet ให้ลบเครื่องหมาย # ด้านหน้าบรรทัดถัดไปเพื่อดู Payload ที่ส่งไป
+        # st.write("DEBUG: Payload to be sent to Google Sheet:", df_to_save.to_dict('records'))
+        # -----------------------
+
         # 5. เรียก API
         with st.spinner("กำลังบันทึกข้อมูล...... กรุณารอสักครู่"):
             response = fetch_sheet_data('write', LOG_SHEET_NAME, df_to_save)
@@ -318,7 +332,7 @@ with tab2:
             st.success(f"✅ บันทึกข้อมูลและอัปเดต เรียบร้อยแล้ว! (อัปเดตล่าสุดตามเวลาไทย: {current_timestamp})")
             
             # รีเซ็ตข้อมูลและสถานะการแก้ไข
-            # เรียก load_log_data(show_spinner=False) เพื่อโหลดข้อมูลใหม่ (ซึ่งจะไม่มีคอลัมน์อัพเดทล่าสุด)
+            # เรียก load_log_data(show_spinner=False) เพื่อโหลดข้อมูลใหม่ (ซึ่งจะรวมคอลัมน์อัพเดทล่าสุดแล้ว)
             st.session_state.log_data = load_log_data(show_spinner=False) 
             st.session_state.initial_log_data = st.session_state.log_data.copy()
             st.session_state.edited_log = False
