@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests # สำหรับการเรียก HTTP API
+from datetime import datetime # NEW: นำเข้า datetime สำหรับการบันทึกเวลา
 
 # --- การตั้งค่าเบื้องต้นของหน้า (Page Configuration) ---
 st.set_page_config(
@@ -35,11 +36,12 @@ SPREADSHEET_ID = "10HEC9q7mwhvCkov1sd8IMWFNYhXLZ7-nQj0S10tAATQ"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyJm3h-MaQoVL7q-cTZjawiIKmSeHgM_8W3Sj_iboGXZRXVFmOvh-XhFvgwaHv4m1s5/exec"
 LOG_SHEET_NAME = "ขั้นตอนการทำงาน-ลักษณะงาน"
 
-# ชื่อคอลัมน์ที่แสดงผลใน UI และคีย์ API ที่เกี่ยวข้อง
+# ชื่อคอลัมน์ที่แสดงผลใน UI และคีย์ API ที่เกี่ยวข้อง (ตอนนี้รวมคอลัมน์ D: อัพเดทล่าสุด)
 LOG_KEYS = {
     'กลุ่มงาน': 'id', # รหัส (Col A)
     'ขั้นตอนการทำงาน-ลักษณะงาน': 'activity', # ขั้นตอนการทำงาน-ลักษณะงาน (Col B)
-    'ตำแหน่งงาน': 'position' # ตำแหน่งงาน (Col C)
+    'ตำแหน่งงาน': 'position', # ตำแหน่งงาน (Col C)
+    'อัพเดทล่าสุด': 'update_date' # วันที่อัปเดต (Col D)
 }
 REQUIRED_COLUMNS = list(LOG_KEYS.keys())
 
@@ -232,7 +234,9 @@ with tab2:
             "ขั้นตอนการทำงาน-ลักษณะงาน", 
             width="large", 
         ),
-        "ตำแหน่งงาน": st.column_config.TextColumn("ตำแหน่งงาน", width="medium")
+        "ตำแหน่งงาน": st.column_config.TextColumn("ตำแหน่งงาน", width="medium"),
+        # NEW: กำหนดคอลัมน์อัพเดทล่าสุดให้อ่านได้อย่างเดียว (disabled)
+        "อัพเดทล่าสุด": st.column_config.TextColumn("อัพเดทล่าสุด", width="medium", disabled=True) 
     }
 
     # 4.3 กรองข้อมูลที่จะแสดงผลใน Editor
@@ -265,8 +269,8 @@ with tab2:
             st.session_state.log_data = pd.concat([data_without_current_group, edited_df], ignore_index=True)
 
     # --- ปุ่ม Save / Update (แก้ไขใหม่ให้ทำงานได้จริง) ---
-    # ใช้ if st.button ซึ่งทำงานหลังจาก st.session_state ถูกอัปเดตในบรรทัดข้างบนแล้ว
-    if st.button("Save / Update", type="primary", disabled=not st.session_state.edited_log):
+    # NEW: ลบ disabled ออก เพื่อให้ปุ่มใช้งานได้ตลอดเวลา
+    if st.button("Save / Update", type="primary"): 
         
         # เตรียมข้อมูลสำหรับการบันทึกจาก st.session_state.log_data ล่าสุด (ซึ่งอัปเดตแล้ว)
         df_to_save = st.session_state.log_data.copy()
@@ -274,22 +278,27 @@ with tab2:
         # 1. Clean data: ลบแถวที่ไม่มีกลุ่มงาน
         df_to_save = df_to_save[df_to_save['กลุ่มงาน'].astype(str).str.strip() != '']
         
-        # 2. Rename columns ให้ตรงกับ API
+        # 2. Add Update Timestamp (NEW)
+        # เพิ่มวันที่และเวลาที่บันทึกข้อมูลล่าสุด
+        current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        df_to_save['อัพเดทล่าสุด'] = current_timestamp 
+        
+        # 3. Rename columns ให้ตรงกับ API
         reverse_rename_map = {k: v for k, v in LOG_KEYS.items()} 
         df_to_save = df_to_save.rename(columns=reverse_rename_map)
         
-        # 3. Select columns
+        # 4. Select columns และจัดลำดับให้ถูกต้องตามที่ Apps Script คาดหวัง (id, activity, position, update_date)
         columns_to_keep = list(LOG_KEYS.values())
         if not df_to_save.empty:
             df_to_save = df_to_save[columns_to_keep]
 
-        # 4. เรียก API
+        # 5. เรียก API
         with st.spinner("กำลังบันทึกข้อมูล...... กรุณารอสักครู่"):
             response = fetch_sheet_data('write', LOG_SHEET_NAME, df_to_save)
             
-        # 5. ตรวจสอบผลลัพธ์
+        # 6. ตรวจสอบผลลัพธ์
         if response and response.get('status') == 'success':
-            st.success("✅ บันทึกข้อมูลและอัปเดต เรียบร้อยแล้ว!")
+            st.success("✅ บันทึกข้อมูลและอัปเดต เรียบร้อยแล้ว! (Timestamp ถูกบันทึกแล้ว)")
             
             # รีเซ็ตข้อมูลและสถานะการแก้ไข
             # เรียก load_log_data(show_spinner=False) เพื่อไม่ให้แสดงข้อความโหลด
