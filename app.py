@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests # สำหรับการเรียก HTTP API
+from datetime import datetime # นำเข้า datetime สำหรับการบันทึกเวลา
+import pytz # นำเข้า pytz สำหรับจัดการ Timezone ในไทย
 
 # --- การตั้งค่าเบื้องต้นของหน้า (Page Configuration) ---
 st.set_page_config(
@@ -36,12 +38,16 @@ GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyJm3h-MaQoVL7q-cTZja
 LOG_SHEET_NAME = "ขั้นตอนการทำงาน-ลักษณะงาน"
 
 # ชื่อคอลัมน์ที่แสดงผลใน UI และคีย์ API ที่เกี่ยวข้อง
+# เพิ่ม 'อัพเดทล่าสุด' เพื่อให้แมปกับ Column D ได้ถูกต้อง
 LOG_KEYS = {
     'กลุ่มงาน': 'id', # รหัส (Col A)
     'ขั้นตอนการทำงาน-ลักษณะงาน': 'activity', # ขั้นตอนการทำงาน-ลักษณะงาน (Col B)
-    'ตำแหน่งงาน': 'position' # ตำแหน่งงาน (Col C)
+    'ตำแหน่งงาน': 'position', # ตำแหน่งงาน (Col C)
+    'อัพเดทล่าสุด': 'update_date' # วันที่อัปเดต (Col D)
 }
-REQUIRED_COLUMNS = list(LOG_KEYS.keys())
+
+# กำหนดเฉพาะคอลัมน์ที่ต้องการแสดงในตาราง (ไม่รวมวันที่อัปเดต เพื่อไม่ให้รกหน้าจอ)
+REQUIRED_COLUMNS = ['กลุ่มงาน', 'ขั้นตอนการทำงาน-ลักษณะงาน', 'ตำแหน่งงาน']
 
 # --- 1. ฟังก์ชันการเชื่อมต่อ Google Apps Script API ---
 
@@ -116,7 +122,12 @@ def load_log_data(show_spinner=True):
             if 'rowIndex' in df.columns:
                 df = df.drop(columns=['rowIndex'])
                   
-            # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับใหม่
+            # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับใหม่ (กรองเฉพาะ 3 คอลัมน์แรกมาแสดง)
+            # ตรวจสอบว่ามีคอลัมน์ครบหรือไม่ ถ้าขาดให้เติมว่างไว้ก่อนตัดเลือก
+            for col in REQUIRED_COLUMNS:
+                if col not in df.columns:
+                    df[col] = ''
+            
             df = df[REQUIRED_COLUMNS]
             
             # 4. การกรอง: ยึดคอลัมน์ 'กลุ่มงาน' (Col A) เป็นหลักมีมีข้อมูลในบรรทัดนั้น ๆ
@@ -265,34 +276,38 @@ with tab2:
             st.session_state.log_data = pd.concat([data_without_current_group, edited_df], ignore_index=True)
 
     # --- ปุ่ม Save / Update (แก้ไขใหม่ให้ทำงานได้จริง) ---
-    # ใช้ if st.button ซึ่งทำงานหลังจาก st.session_state ถูกอัปเดตในบรรทัดข้างบนแล้ว
-    if st.button("Save / Update", type="primary", disabled=not st.session_state.edited_log):
+    # ลบ disabled ออกเพื่อให้กดได้ตลอด
+    if st.button("Save / Update", type="primary"):
         
-        # เตรียมข้อมูลสำหรับการบันทึกจาก st.session_state.log_data ล่าสุด (ซึ่งอัปเดตแล้ว)
+        # เตรียมข้อมูลสำหรับการบันทึกจาก st.session_state.log_data ล่าสุด
         df_to_save = st.session_state.log_data.copy()
 
         # 1. Clean data: ลบแถวที่ไม่มีกลุ่มงาน
         df_to_save = df_to_save[df_to_save['กลุ่มงาน'].astype(str).str.strip() != '']
         
-        # 2. Rename columns ให้ตรงกับ API
+        # 2. เพิ่ม Timestamp (Col D) อัตโนมัติเมื่อกดปุ่ม
+        tz = pytz.timezone('Asia/Bangkok')
+        current_time = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
+        df_to_save['อัพเดทล่าสุด'] = current_time
+        
+        # 3. Rename columns ให้ตรงกับ API (รวมถึง update_date)
         reverse_rename_map = {k: v for k, v in LOG_KEYS.items()} 
         df_to_save = df_to_save.rename(columns=reverse_rename_map)
         
-        # 3. Select columns
+        # 4. Select columns ให้ครบทั้ง 4 คอลัมน์ตามที่ Apps Script ต้องการ
         columns_to_keep = list(LOG_KEYS.values())
         if not df_to_save.empty:
             df_to_save = df_to_save[columns_to_keep]
 
-        # 4. เรียก API
+        # 5. เรียก API
         with st.spinner("กำลังบันทึกข้อมูล...... กรุณารอสักครู่"):
             response = fetch_sheet_data('write', LOG_SHEET_NAME, df_to_save)
             
-        # 5. ตรวจสอบผลลัพธ์
+        # 6. ตรวจสอบผลลัพธ์
         if response and response.get('status') == 'success':
             st.success("✅ บันทึกข้อมูลและอัปเดต เรียบร้อยแล้ว!")
             
             # รีเซ็ตข้อมูลและสถานะการแก้ไข
-            # เรียก load_log_data(show_spinner=False) เพื่อไม่ให้แสดงข้อความโหลด
             st.session_state.log_data = load_log_data(show_spinner=False) 
             st.session_state.initial_log_data = st.session_state.log_data.copy()
             st.session_state.edited_log = False
