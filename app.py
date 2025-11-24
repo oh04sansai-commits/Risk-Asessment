@@ -251,12 +251,12 @@ with tab2:
             width="large", 
         ),
         "ตำแหน่งงาน": st.column_config.TextColumn("ตำแหน่งงาน", width="medium"),
-        # NEW: เพิ่มคอลัมน์วันที่อัปเดต (อ่านอย่างเดียว)
+        # ส่วนนี้คือการกำหนดให้คอลัมน์ 'อัพเดทล่าสุด' แสดงผลเป็นแบบอ่านอย่างเดียว (Calendar/Input Disabled)
         "อัพเดทล่าสุด": st.column_config.DatetimeColumn(
             "อัพเดทล่าสุด (Col D)", 
             format="YYYY-MM-DD HH:mm:ss", 
             width="medium",
-            disabled=True # ไม่อนุญาตให้แก้ไขใน UI
+            disabled=True # ไม่อนุญาตให้แก้ไขใน UI (เป็นแบบอัตโนมัติ)
         ),
     }
 
@@ -299,13 +299,12 @@ with tab2:
         df_to_save = df_to_save[df_to_save['กลุ่มงาน'].astype(str).str.strip() != '']
         
         # 2. Add Update Timestamp (ใช้ Timezone ไทย)
-        # เพิ่มวันที่และเวลาที่บันทึกข้อมูลล่าสุด
+        # โค้ดส่วนนี้จะสร้างวันที่และเวลาใหม่โดยอัตโนมัติทุกครั้งที่กดปุ่ม
         bangkok_tz = pytz.timezone('Asia/Bangkok')
         current_timestamp = datetime.now(bangkok_tz).strftime("%Y-%m-%d %H:%M:%S")
         
         # อัปเดตคอลัมน์ 'อัพเดทล่าสุด' ในข้อมูลที่จะบันทึกทั้งหมด
-        # ตอนนี้คอลัมน์นี้ถูกรวมอยู่ใน df_to_save แล้วจากการอัปเดต REQUIRED_COLUMNS 
-        # ดังนั้นการกำหนดค่านี้จะอัปเดตค่าของแถวทั้งหมด
+        # ค่านี้จะถูกส่งไป Google Sheet ใน Column D
         df_to_save['อัพเดทล่าสุด'] = current_timestamp 
         
         # 3. Rename columns ให้ตรงกับ API
@@ -318,11 +317,6 @@ with tab2:
         if not df_to_save.empty:
             df_to_save = df_to_save[columns_to_keep]
 
-        # --- Debugging check ---
-        # หากวันที่ยังไม่ขึ้นใน Google Sheet ให้ลบเครื่องหมาย # ด้านหน้าบรรทัดถัดไปเพื่อดู Payload ที่ส่งไป
-        # st.write("DEBUG: Payload to be sent to Google Sheet:", df_to_save.to_dict('records'))
-        # -----------------------
-
         # 5. เรียก API
         with st.spinner("กำลังบันทึกข้อมูล...... กรุณารอสักครู่"):
             response = fetch_sheet_data('write', LOG_SHEET_NAME, df_to_save)
@@ -332,7 +326,7 @@ with tab2:
             st.success(f"✅ บันทึกข้อมูลและอัปเดต เรียบร้อยแล้ว! (อัปเดตล่าสุดตามเวลาไทย: {current_timestamp})")
             
             # รีเซ็ตข้อมูลและสถานะการแก้ไข
-            # เรียก load_log_data(show_spinner=False) เพื่อโหลดข้อมูลใหม่ (ซึ่งจะรวมคอลัมน์อัพเดทล่าสุดแล้ว)
+            # เรียก load_log_data(show_spinner=False) เพื่อโหลดข้อมูลใหม่ 
             st.session_state.log_data = load_log_data(show_spinner=False) 
             st.session_state.initial_log_data = st.session_state.log_data.copy()
             st.session_state.edited_log = False
