@@ -129,8 +129,6 @@ def load_log_data(show_spinner=True):
             df = df[REQUIRED_COLUMNS]
             
             # 4. แก้ไข: ยกเลิกการกรองด้วย 'กลุ่มงาน' เพื่อให้แสดงข้อมูลทั้งหมดแม้ไม่มี ID
-            # (เปลี่ยนจากตรวจสอบ 'กลุ่มงาน' เป็นตรวจสอบว่าแถวไม่ว่างเปล่าทั้งหมด)
-            # แทนที่ None ด้วย "" เพื่อป้องกัน Error
             df = df.fillna("")
             
             return df
@@ -221,16 +219,24 @@ with tab2:
     # ดึงค่ากลุ่มงานที่ไม่ว่างมาแสดงในตัวเลือก (แต่ในตารางจะแสดงทั้งหมด)
     if 'กลุ่มงาน' in current_data_for_display.columns:
         non_empty_groups = current_data_for_display['กลุ่มงาน'].astype(str).str.strip().unique()
-        # กรองค่าว่างออกจากตัวเลือก Dropdown
         valid_groups = [g for g in non_empty_groups if g and g.lower() != 'nan' and g.lower() != 'none']
         filter_options = ['--- แสดงทั้งหมด ---'] + sorted(valid_groups)
     else:
         filter_options = ['--- แสดงทั้งหมด ---']
-          
+    
+    # Fix Jumping: คำนวณ index ที่ถูกต้องจากค่าที่เลือกไว้ใน session state (ถ้ามี)
+    # เพื่อป้องกัน dropdown เด้งกลับไปค่าแรกเมื่อตารางรีเฟรช
+    default_index = 0
+    current_selection = st.session_state.get("log_filter_select", filter_options[0])
+    try:
+        default_index = filter_options.index(current_selection)
+    except ValueError:
+        default_index = 0
+
     selected_id = st.selectbox(
         "กรองข้อมูลตามกลุ่มงาน:",
         options=filter_options,
-        index=0,
+        index=default_index, # ใช้ index ที่คำนวณมาเพื่อล็อคตำแหน่ง
         key="log_filter_select"
     )
 
@@ -272,6 +278,10 @@ with tab2:
         if selected_id == '--- แสดงทั้งหมด ---':
             st.session_state.log_data = edited_df.copy()
         else:
+            # **FIX JUMPING**: ถ้ามีการเพิ่มแถวใหม่ขณะที่กรองอยู่ ให้เติม 'กลุ่มงาน' ให้โดยอัตโนมัติ
+            # เพื่อไม่ให้แถวใหม่หายไปจากมุมมองการกรอง (ซึ่งเป็นสาเหตุให้ตารางเด้ง/หด)
+            edited_df['กลุ่มงาน'] = edited_df['กลุ่มงาน'].replace(['', np.nan, None], selected_id)
+            
             data_without_current_group = st.session_state.log_data[st.session_state.log_data['กลุ่มงาน'] != selected_id]
             st.session_state.log_data = pd.concat([data_without_current_group, edited_df], ignore_index=True)
 
@@ -282,12 +292,8 @@ with tab2:
         df_to_save = st.session_state.log_data.copy()
 
         # 1. แก้ไขจุดสำคัญ: ไม่ลบแถวที่ 'กลุ่มงาน' ว่าง แต่จะแทนค่า None เป็น ""
-        # เพื่อให้แถวใหม่ที่ยังไม่ได้กรอก ID ถูกบันทึกไปด้วย
         df_to_save = df_to_save.fillna("")
         
-        # (ทางเลือก) ลบเฉพาะแถวที่ว่างเปล่าจริงๆ ทุกช่อง (ถ้ามี)
-        # df_to_save = df_to_save.replace(r'^\s*$', np.nan, regex=True).dropna(how='all').fillna("")
-
         # 2. เพิ่ม Timestamp (Col D) อัตโนมัติเมื่อกดปุ่ม
         tz = pytz.timezone('Asia/Bangkok')
         current_time = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
