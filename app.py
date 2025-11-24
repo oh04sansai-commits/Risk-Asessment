@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests # สำหรับการเรียก HTTP API
-from datetime import datetime # NEW: นำเข้า datetime สำหรับการบันทึกเวลา
+from datetime import datetime # นำเข้า datetime สำหรับการบันทึกเวลา
+import pytz # NEW: นำเข้า pytz สำหรับจัดการ Timezone ในไทย
 
 # --- การตั้งค่าเบื้องต้นของหน้า (Page Configuration) ---
 st.set_page_config(
@@ -44,7 +45,7 @@ LOG_KEYS = {
     'อัพเดทล่าสุด': 'update_date' # วันที่อัปเดต (Col D)
 }
 
-# ***แก้ไข***: กำหนดให้เฉพาะคอลัมน์ที่ต้องการแสดงผลและแก้ไขได้เท่านั้น
+# กำหนดให้เฉพาะคอลัมน์ที่ต้องการแสดงผลและแก้ไขได้เท่านั้น
 REQUIRED_COLUMNS = ['กลุ่มงาน', 'ขั้นตอนการทำงาน-ลักษณะงาน', 'ตำแหน่งงาน'] 
 
 # --- 1. ฟังก์ชันการเชื่อมต่อ Google Apps Script API ---
@@ -108,7 +109,6 @@ def load_log_data(show_spinner=True):
             data_list = response.get('data', [])
             
             # เนื่องจากตอนนี้มีเพียง 3 คอลัมน์ที่ต้องการแสดงผลใน REQUIRED_COLUMNS 
-            # จึงต้องมั่นใจว่า DataFrame ที่ส่งคืนมามีคอลัมน์เหล่านี้
             columns_to_load = list(LOG_KEYS.keys())
             
             if not data_list:
@@ -242,7 +242,7 @@ with tab2:
     # แสดงคำแนะนำการใช้งาน
     st.markdown('<p style="font-size: 16px;">แก้ไขข้อมูลในตารางโดยตรง เพิ่ม/ลบรายการใหม่ และกด <strong>Save / Update</strong> เพื่ออัปเดตข้อมูล</p>', unsafe_allow_html=True)
     
-    # ***แก้ไข***: ลบคอลัมน์ 'อัพเดทล่าสุด' ออกจากการกำหนดค่าคอลัมน์
+    # กำหนดค่าคอลัมน์ (มีเพียง 3 คอลัมน์หลักที่แสดง)
     column_config = {
         "กลุ่มงาน": st.column_config.TextColumn("กลุ่มงาน", width="small"), 
         "ขั้นตอนการทำงาน-ลักษณะงาน": st.column_config.TextColumn(
@@ -290,12 +290,13 @@ with tab2:
         # 1. Clean data: ลบแถวที่ไม่มีกลุ่มงาน
         df_to_save = df_to_save[df_to_save['กลุ่มงาน'].astype(str).str.strip() != '']
         
-        # 2. Add Update Timestamp (***ยังคงอยู่เพื่อบันทึกใน Google Sheet***)
+        # 2. Add Update Timestamp (NEW: ใช้ Timezone ไทย)
         # เพิ่มวันที่และเวลาที่บันทึกข้อมูลล่าสุด
-        current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        bangkok_tz = pytz.timezone('Asia/Bangkok')
+        current_timestamp = datetime.now(bangkok_tz).strftime("%Y-%m-%d %H:%M:%S")
         
         # อัปเดตคอลัมน์ 'อัพเดทล่าสุด' ในข้อมูลที่จะบันทึกทั้งหมด
-        # *** เนื่องจากคอลัมน์นี้ไม่มีใน st.session_state.log_data จึงต้องถูกสร้างขึ้นมาใหม่ที่นี่ ***
+        # เนื่องจากคอลัมน์นี้ไม่มีใน st.session_state.log_data จึงต้องถูกสร้างขึ้นมาใหม่ที่นี่
         df_to_save['อัพเดทล่าสุด'] = current_timestamp 
         
         # 3. Rename columns ให้ตรงกับ API
@@ -303,7 +304,7 @@ with tab2:
         df_to_save = df_to_save.rename(columns=reverse_rename_map)
         
         # 4. Select columns และจัดลำดับให้ถูกต้องตามที่ Apps Script คาดหวัง (id, activity, position, update_date)
-        # *** ใช้ LOG_KEYS.values() เพื่อให้รวม 'update_date' ที่จำเป็นต้องบันทึก ***
+        # ใช้ LOG_KEYS.values() เพื่อให้รวม 'update_date' ที่จำเป็นต้องบันทึก
         columns_to_keep = list(LOG_KEYS.values()) 
         if not df_to_save.empty:
             df_to_save = df_to_save[columns_to_keep]
@@ -314,7 +315,7 @@ with tab2:
             
         # 6. ตรวจสอบผลลัพธ์
         if response and response.get('status') == 'success':
-            st.success(f"✅ บันทึกข้อมูลและอัปเดต เรียบร้อยแล้ว! (อัปเดตล่าสุด: {current_timestamp})")
+            st.success(f"✅ บันทึกข้อมูลและอัปเดต เรียบร้อยแล้ว! (อัปเดตล่าสุดตามเวลาไทย: {current_timestamp})")
             
             # รีเซ็ตข้อมูลและสถานะการแก้ไข
             # เรียก load_log_data(show_spinner=False) เพื่อโหลดข้อมูลใหม่ (ซึ่งจะไม่มีคอลัมน์อัพเดทล่าสุด)
