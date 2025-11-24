@@ -38,7 +38,6 @@ GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyJm3h-MaQoVL7q-cTZja
 LOG_SHEET_NAME = "ขั้นตอนการทำงาน-ลักษณะงาน"
 
 # ชื่อคอลัมน์ที่แสดงผลใน UI และคีย์ API ที่เกี่ยวข้อง
-# เพิ่ม 'อัพเดทล่าสุด' เพื่อให้แมปกับ Column D ได้ถูกต้อง
 LOG_KEYS = {
     'กลุ่มงาน': 'id', # รหัส (Col A)
     'ขั้นตอนการทำงาน-ลักษณะงาน': 'activity', # ขั้นตอนการทำงาน-ลักษณะงาน (Col B)
@@ -123,15 +122,16 @@ def load_log_data(show_spinner=True):
                 df = df.drop(columns=['rowIndex'])
                   
             # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับใหม่ (กรองเฉพาะ 3 คอลัมน์แรกมาแสดง)
-            # ตรวจสอบว่ามีคอลัมน์ครบหรือไม่ ถ้าขาดให้เติมว่างไว้ก่อนตัดเลือก
             for col in REQUIRED_COLUMNS:
                 if col not in df.columns:
                     df[col] = ''
             
             df = df[REQUIRED_COLUMNS]
             
-            # 4. การกรอง: ยึดคอลัมน์ 'กลุ่มงาน' (Col A) เป็นหลักมีมีข้อมูลในบรรทัดนั้น ๆ
-            df = df[df['กลุ่มงาน'].astype(str).str.strip() != '']
+            # 4. แก้ไข: ยกเลิกการกรองด้วย 'กลุ่มงาน' เพื่อให้แสดงข้อมูลทั้งหมดแม้ไม่มี ID
+            # (เปลี่ยนจากตรวจสอบ 'กลุ่มงาน' เป็นตรวจสอบว่าแถวไม่ว่างเปล่าทั้งหมด)
+            # แทนที่ None ด้วย "" เพื่อป้องกัน Error
+            df = df.fillna("")
             
             return df
         else:
@@ -218,9 +218,12 @@ with tab2:
     # 4.1 Dropdown กรองข้อมูล
     current_data_for_display = st.session_state.log_data.copy()
 
+    # ดึงค่ากลุ่มงานที่ไม่ว่างมาแสดงในตัวเลือก (แต่ในตารางจะแสดงทั้งหมด)
     if 'กลุ่มงาน' in current_data_for_display.columns:
         non_empty_groups = current_data_for_display['กลุ่มงาน'].astype(str).str.strip().unique()
-        filter_options = ['--- แสดงทั้งหมด ---'] + sorted(non_empty_groups[non_empty_groups != ''].tolist())
+        # กรองค่าว่างออกจากตัวเลือก Dropdown
+        valid_groups = [g for g in non_empty_groups if g and g.lower() != 'nan' and g.lower() != 'none']
+        filter_options = ['--- แสดงทั้งหมด ---'] + sorted(valid_groups)
     else:
         filter_options = ['--- แสดงทั้งหมด ---']
           
@@ -233,7 +236,6 @@ with tab2:
 
     st.markdown("### ตารางขั้นตอนการทำงาน (แก้ไข/เพิ่ม/ลบได้)")
     
-    # NEW LOCATION: ย้ายข้อความมาไว้ที่นี่และใช้ st.markdown พร้อมกำหนดขนาดตัวอักษร
     st.markdown('<p style="font-size: 16px;">แก้ไขข้อมูลในตารางโดยตรง เพิ่ม/ลบรายการใหม่ และกด <strong>Save / Update</strong> เพื่ออัปเดตข้อมูล</p>', unsafe_allow_html=True)
     
     # 4.2 Column Config
@@ -263,38 +265,39 @@ with tab2:
         num_rows="dynamic"
     )
     
-    # 4.4 จัดการการเปลี่ยนแปลง (ตรวจจับการแก้ไข/การเพิ่ม/การลบ)
-    # ส่วนนี้สำคัญมาก: อัปเดต st.session_state.log_data ทันทีที่มีการแก้ไข
+    # 4.4 จัดการการเปลี่ยนแปลง
     if not edited_df.equals(display_df):
         st.session_state.edited_log = True
           
         if selected_id == '--- แสดงทั้งหมด ---':
             st.session_state.log_data = edited_df.copy()
         else:
-            # มี Filter: ต้องทำการ Merge ข้อมูลที่แก้ไข/เพิ่ม/ลบ กลับเข้าสู่ข้อมูลหลัก
             data_without_current_group = st.session_state.log_data[st.session_state.log_data['กลุ่มงาน'] != selected_id]
             st.session_state.log_data = pd.concat([data_without_current_group, edited_df], ignore_index=True)
 
     # --- ปุ่ม Save / Update (แก้ไขใหม่ให้ทำงานได้จริง) ---
-    # ลบ disabled ออกเพื่อให้กดได้ตลอด
     if st.button("Save / Update", type="primary"):
         
-        # เตรียมข้อมูลสำหรับการบันทึกจาก st.session_state.log_data ล่าสุด
+        # เตรียมข้อมูลสำหรับการบันทึก
         df_to_save = st.session_state.log_data.copy()
 
-        # 1. Clean data: ลบแถวที่ไม่มีกลุ่มงาน
-        df_to_save = df_to_save[df_to_save['กลุ่มงาน'].astype(str).str.strip() != '']
+        # 1. แก้ไขจุดสำคัญ: ไม่ลบแถวที่ 'กลุ่มงาน' ว่าง แต่จะแทนค่า None เป็น ""
+        # เพื่อให้แถวใหม่ที่ยังไม่ได้กรอก ID ถูกบันทึกไปด้วย
+        df_to_save = df_to_save.fillna("")
         
+        # (ทางเลือก) ลบเฉพาะแถวที่ว่างเปล่าจริงๆ ทุกช่อง (ถ้ามี)
+        # df_to_save = df_to_save.replace(r'^\s*$', np.nan, regex=True).dropna(how='all').fillna("")
+
         # 2. เพิ่ม Timestamp (Col D) อัตโนมัติเมื่อกดปุ่ม
         tz = pytz.timezone('Asia/Bangkok')
         current_time = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
         df_to_save['อัพเดทล่าสุด'] = current_time
         
-        # 3. Rename columns ให้ตรงกับ API (รวมถึง update_date)
+        # 3. Rename columns ให้ตรงกับ API
         reverse_rename_map = {k: v for k, v in LOG_KEYS.items()} 
         df_to_save = df_to_save.rename(columns=reverse_rename_map)
         
-        # 4. Select columns ให้ครบทั้ง 4 คอลัมน์ตามที่ Apps Script ต้องการ
+        # 4. Select columns
         columns_to_keep = list(LOG_KEYS.values())
         if not df_to_save.empty:
             df_to_save = df_to_save[columns_to_keep]
@@ -307,12 +310,11 @@ with tab2:
         if response and response.get('status') == 'success':
             st.success("✅ บันทึกข้อมูลและอัปเดต เรียบร้อยแล้ว!")
             
-            # รีเซ็ตข้อมูลและสถานะการแก้ไข
+            # รีเซ็ตข้อมูล
             st.session_state.log_data = load_log_data(show_spinner=False) 
             st.session_state.initial_log_data = st.session_state.log_data.copy()
             st.session_state.edited_log = False
             
-            # รอสักครู่แล้ว Rerun เพื่อรีเฟรชหน้าจอ
             import time
             time.sleep(1) 
             st.rerun()
@@ -321,13 +323,10 @@ with tab2:
             st.error(f"❌ บันทึกข้อมูลล้มเหลว: {error_msg}")
             st.session_state.edited_log = True
           
-    # (Removed st.caption here)
-
 # --- แท็บ 1: คู่มือการประเมินความเสี่ยง ---
 with tab1:
     st.header("1. คู่มือการประเมินความเสี่ยงจากการทำงาน")
     
-    # เตือนเมื่อมีข้อมูลที่ยังไม่ได้บันทึก
     if disabled_state:
         st.warning(f"**{disabled_text}** ก่อนเข้าถึงแท็บนี้")
     
@@ -342,13 +341,11 @@ with tab1:
 with tab3:
     st.header("3. ประเมินความเสี่ยงจากการทำงาน")
 
-    # เตือนเมื่อมีข้อมูลที่ยังไม่ได้บันทึก
     if disabled_state:
         st.warning(f"**{disabled_text}** ก่อนเข้าถึงแท็บนี้")
           
     department_options = ["--- กรุณาเลือกหน่วยงาน ---"] + list(st.session_state.risk_mock_data.keys())
     
-    # ปิดการใช้งาน Selectbox หากมีข้อมูลที่ยังไม่ได้บันทึก
     selected_department = st.selectbox(
         "เลือกหน่วยงานที่ต้องการประเมิน:",
         options=department_options,
