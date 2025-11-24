@@ -36,14 +36,16 @@ SPREADSHEET_ID = "10HEC9q7mwhvCkov1sd8IMWFNYhXLZ7-nQj0S10tAATQ"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyJm3h-MaQoVL7q-cTZjawiIKmSeHgM_8W3Sj_iboGXZRXVFmOvh-XhFvgwaHv4m1s5/exec"
 LOG_SHEET_NAME = "ขั้นตอนการทำงาน-ลักษณะงาน"
 
-# ชื่อคอลัมน์ที่แสดงผลใน UI และคีย์ API ที่เกี่ยวข้อง (ตอนนี้รวมคอลัมน์ D: อัพเดทล่าสุด)
+# ชื่อคอลัมน์ที่แสดงผลใน UI และคีย์ API ที่เกี่ยวข้อง
 LOG_KEYS = {
     'กลุ่มงาน': 'id', # รหัส (Col A)
     'ขั้นตอนการทำงาน-ลักษณะงาน': 'activity', # ขั้นตอนการทำงาน-ลักษณะงาน (Col B)
     'ตำแหน่งงาน': 'position', # ตำแหน่งงาน (Col C)
     'อัพเดทล่าสุด': 'update_date' # วันที่อัปเดต (Col D)
 }
-REQUIRED_COLUMNS = list(LOG_KEYS.keys())
+
+# ***แก้ไข***: กำหนดให้เฉพาะคอลัมน์ที่ต้องการแสดงผลและแก้ไขได้เท่านั้น
+REQUIRED_COLUMNS = ['กลุ่มงาน', 'ขั้นตอนการทำงาน-ลักษณะงาน', 'ตำแหน่งงาน'] 
 
 # --- 1. ฟังก์ชันการเชื่อมต่อ Google Apps Script API ---
 
@@ -105,8 +107,13 @@ def load_log_data(show_spinner=True):
         if response and response.get('status') == 'success':
             data_list = response.get('data', [])
             
+            # เนื่องจากตอนนี้มีเพียง 3 คอลัมน์ที่ต้องการแสดงผลใน REQUIRED_COLUMNS 
+            # จึงต้องมั่นใจว่า DataFrame ที่ส่งคืนมามีคอลัมน์เหล่านี้
+            columns_to_load = list(LOG_KEYS.keys())
+            
             if not data_list:
-                return pd.DataFrame(columns=REQUIRED_COLUMNS)
+                # ใช้ REQUIRED_COLUMNS สำหรับ DataFrame ว่างที่ใช้ใน Session State
+                return pd.DataFrame(columns=REQUIRED_COLUMNS) 
             
             df = pd.DataFrame(data_list)
             
@@ -126,7 +133,7 @@ def load_log_data(show_spinner=True):
             if 'rowIndex' in df.columns:
                 df = df.drop(columns=['rowIndex'])
                   
-            # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับใหม่ (This is now safe)
+            # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับใหม่ (ตอนนี้มีแค่ 3 คอลัมน์หลัก)
             df = df[REQUIRED_COLUMNS] 
             
             # 4. การกรอง: ยึดคอลัมน์ 'กลุ่มงาน' (Col A) เป็นหลักมีมีข้อมูลในบรรทัดนั้น ๆ
@@ -235,7 +242,7 @@ with tab2:
     # แสดงคำแนะนำการใช้งาน
     st.markdown('<p style="font-size: 16px;">แก้ไขข้อมูลในตารางโดยตรง เพิ่ม/ลบรายการใหม่ และกด <strong>Save / Update</strong> เพื่ออัปเดตข้อมูล</p>', unsafe_allow_html=True)
     
-    # 4.2 Column Config
+    # ***แก้ไข***: ลบคอลัมน์ 'อัพเดทล่าสุด' ออกจากการกำหนดค่าคอลัมน์
     column_config = {
         "กลุ่มงาน": st.column_config.TextColumn("กลุ่มงาน", width="small"), 
         "ขั้นตอนการทำงาน-ลักษณะงาน": st.column_config.TextColumn(
@@ -243,8 +250,6 @@ with tab2:
             width="large", 
         ),
         "ตำแหน่งงาน": st.column_config.TextColumn("ตำแหน่งงาน", width="medium"),
-        # NEW: กำหนดคอลัมน์อัพเดทล่าสุดให้อ่านได้อย่างเดียวและใช้ width="small"
-        "อัพเดทล่าสุด": st.column_config.TextColumn("อัพเดทล่าสุด", width="small", disabled=True) 
     }
 
     # 4.3 กรองข้อมูลที่จะแสดงผลใน Editor
@@ -258,7 +263,7 @@ with tab2:
         display_df,
         key="log_editor",
         column_config=column_config,
-        column_order=REQUIRED_COLUMNS, 
+        column_order=REQUIRED_COLUMNS, # ใช้ REQUIRED_COLUMNS ที่ไม่มี 'อัพเดทล่าสุด'
         hide_index=True,
         use_container_width=True,
         num_rows="dynamic"
@@ -276,8 +281,7 @@ with tab2:
             data_without_current_group = st.session_state.log_data[st.session_state.log_data['กลุ่มงาน'] != selected_id]
             st.session_state.log_data = pd.concat([data_without_current_group, edited_df], ignore_index=True)
 
-    # --- ปุ่ม Save / Update (แก้ไขใหม่ให้ทำงานได้จริง) ---
-    # ปุ่มใช้งานได้ตลอดเวลา
+    # --- ปุ่ม Save / Update (ทำงานได้ตลอดเวลา) ---
     if st.button("Save / Update", type="primary"): 
         
         # เตรียมข้อมูลสำหรับการบันทึกจาก st.session_state.log_data ล่าสุด (ซึ่งอัปเดตแล้ว)
@@ -286,11 +290,12 @@ with tab2:
         # 1. Clean data: ลบแถวที่ไม่มีกลุ่มงาน
         df_to_save = df_to_save[df_to_save['กลุ่มงาน'].astype(str).str.strip() != '']
         
-        # 2. Add Update Timestamp (NEW)
+        # 2. Add Update Timestamp (***ยังคงอยู่เพื่อบันทึกใน Google Sheet***)
         # เพิ่มวันที่และเวลาที่บันทึกข้อมูลล่าสุด
         current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # อัปเดตคอลัมน์ 'อัพเดทล่าสุด' ในข้อมูลที่จะบันทึกทั้งหมด
+        # *** เนื่องจากคอลัมน์นี้ไม่มีใน st.session_state.log_data จึงต้องถูกสร้างขึ้นมาใหม่ที่นี่ ***
         df_to_save['อัพเดทล่าสุด'] = current_timestamp 
         
         # 3. Rename columns ให้ตรงกับ API
@@ -298,7 +303,8 @@ with tab2:
         df_to_save = df_to_save.rename(columns=reverse_rename_map)
         
         # 4. Select columns และจัดลำดับให้ถูกต้องตามที่ Apps Script คาดหวัง (id, activity, position, update_date)
-        columns_to_keep = list(LOG_KEYS.values())
+        # *** ใช้ LOG_KEYS.values() เพื่อให้รวม 'update_date' ที่จำเป็นต้องบันทึก ***
+        columns_to_keep = list(LOG_KEYS.values()) 
         if not df_to_save.empty:
             df_to_save = df_to_save[columns_to_keep]
 
@@ -311,7 +317,7 @@ with tab2:
             st.success(f"✅ บันทึกข้อมูลและอัปเดต เรียบร้อยแล้ว! (อัปเดตล่าสุด: {current_timestamp})")
             
             # รีเซ็ตข้อมูลและสถานะการแก้ไข
-            # เรียก load_log_data(show_spinner=False) เพื่อไม่ให้แสดงข้อความโหลด
+            # เรียก load_log_data(show_spinner=False) เพื่อโหลดข้อมูลใหม่ (ซึ่งจะไม่มีคอลัมน์อัพเดทล่าสุด)
             st.session_state.log_data = load_log_data(show_spinner=False) 
             st.session_state.initial_log_data = st.session_state.log_data.copy()
             st.session_state.edited_log = False
