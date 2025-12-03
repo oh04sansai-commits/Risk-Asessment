@@ -120,8 +120,8 @@ def load_log_data(show_spinner=True):
             # 2. ทำความสะอาดคอลัมน์ที่ไม่ต้องการ
             if 'rowIndex' in df.columns:
                 df = df.drop(columns=['rowIndex'])
-                  
-            # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับใหม่ (กรองเฉพาะ 3 คอลัมน์แรกมาแสดง)
+                
+            # 3. เลือกเฉพาะคอลัมน์ที่ต้องการตามลำดับใหม่
             for col in REQUIRED_COLUMNS:
                 if col not in df.columns:
                     df[col] = ''
@@ -131,8 +131,7 @@ def load_log_data(show_spinner=True):
             # 4. แก้ไข: ยกเลิกการกรองด้วย 'กลุ่มงาน' เพื่อให้แสดงข้อมูลทั้งหมดแม้ไม่มี ID
             df = df.fillna("")
             
-            # 5. เพิ่มคอลัมน์ 'ลบ' สำหรับ Checkbox (ค่าเริ่มต้น False)
-            df['ลบ'] = False
+            # 5. (ลบคอลัมน์ 'ลบ' ออกเพื่อให้ใช้ฟังก์ชันการเพิ่ม/ลบแถวของ data_editor โดยตรง)
             
             return df
         else:
@@ -167,12 +166,11 @@ if 'log_data' not in st.session_state:
     st.session_state.edited_log = False
 
 
-# --- ฟังก์ชันสำหรับเพิ่มแถวใหม่ ---
+# --- ฟังก์ชันสำหรับเพิ่มแถวใหม่ (ไม่ได้ใช้แล้ว เนื่องจาก data_editor จัดการเอง) ---
 def add_new_row():
     """เพิ่มแถวว่างใหม่ใน Session State และตั้งค่าว่ามีการแก้ไข"""
-    # สร้างแถวใหม่โดยมีคอลัมน์ครบถ้วนรวมถึง 'ลบ'
+    # สร้างแถวใหม่โดยมีคอลัมน์ครบถ้วน
     new_row_data = {col: [''] for col in REQUIRED_COLUMNS}
-    new_row_data['ลบ'] = [False]
     new_row = pd.DataFrame(new_row_data)
     
     st.session_state.log_data = pd.concat([st.session_state.log_data, new_row], ignore_index=True)
@@ -250,16 +248,11 @@ with tab2:
 
     st.markdown("### ตารางขั้นตอนการทำงาน (แก้ไข/เพิ่ม/ลบได้)")
     
-    st.markdown('<p style="font-size: 16px;">แก้ไขข้อมูลในตารางโดยตรง เพิ่ม/ลบรายการใหม่ และกด <strong>Save / Update</strong> เพื่ออัปเดตข้อมูล</p>', unsafe_allow_html=True)
+    # อัพเดตคำแนะนำให้ชัดเจนขึ้นสำหรับ data_editor
+    st.markdown('<p style="font-size: 16px;">แก้ไขข้อมูลในตารางโดยตรง เพิ่มแถวใหม่ด้วยปุ่ม <strong>+ Add row</strong> ด้านล่าง หรือลบแถวโดยกด 🗑️ ไอคอนเมื่อโฮเวอร์ที่แถว และกด <strong>Save / Update</strong> เพื่ออัปเดตข้อมูล</p>', unsafe_allow_html=True)
     
-    # 4.2 Column Config (เพิ่มการตั้งค่าคอลัมน์ "ลบ")
+    # 4.2 Column Config (ยกเลิกการใช้คอลัมน์ 'ลบ')
     column_config = {
-        "ลบ": st.column_config.CheckboxColumn(
-            "ลบ",
-            help="เลือกเพื่อลบรายการนี้",
-            default=False,
-            width="small"
-        ),
         "กลุ่มงาน": st.column_config.TextColumn("กลุ่มงาน", width="small"), 
         "ขั้นตอนการทำงาน-ลักษณะงาน": st.column_config.TextColumn(
             "ขั้นตอนการทำงาน-ลักษณะงาน", 
@@ -271,17 +264,12 @@ with tab2:
     # 4.3 กรองข้อมูลที่จะแสดงผลใน Editor
     display_df = st.session_state.log_data.copy()
     
-    # ตรวจสอบว่ามีคอลัมน์ 'ลบ' หรือไม่ ถ้าไม่มีให้เพิ่ม (ป้องกัน Error กรณีข้อมูลเก่าค้าง)
-    if 'ลบ' not in display_df.columns:
-        display_df['ลบ'] = False
-
     if selected_id != '--- แสดงทั้งหมด ---':
         # เก็บ Index ของแถวที่ถูกกรอง เพื่อให้ง่ายต่อการ Merge กลับ
-        original_indices_filtered = display_df[display_df['กลุ่มงาน'] == selected_id].index
         display_df = display_df[display_df['กลุ่มงาน'] == selected_id]
     
-    # จัดลำดับคอลัมน์ เอา 'ลบ' ไว้หน้าสุด
-    editor_columns = ['ลบ'] + REQUIRED_COLUMNS
+    # จัดลำดับคอลัมน์ (ใช้ตาม REQUIRED_COLUMNS)
+    editor_columns = REQUIRED_COLUMNS
 
     edited_df = st.data_editor(
         display_df,
@@ -290,41 +278,34 @@ with tab2:
         column_order=editor_columns, 
         hide_index=True,
         use_container_width=True,
-        num_rows="dynamic"
+        num_rows="dynamic" # จุดสำคัญที่ทำให้เพิ่ม/ลบแถวได้
     )
     
     # 4.4 จัดการการเปลี่ยนแปลง
-    if not edited_df.equals(display_df):
+    # ใช้ `.reset_index(drop=True)` เพื่อให้แน่ใจว่าการเปรียบเทียบและการ concat ทำงานอย่างถูกต้องเมื่อมีการเพิ่ม/ลบแถว
+    
+    # สร้าง DataFrame ที่แสดงผลปัจจุบัน (ไม่มี index) เพื่อเปรียบเทียบ
+    current_display_df_for_compare = display_df.copy().reset_index(drop=True)
+    edited_df_for_compare = edited_df.copy().reset_index(drop=True)
+
+    if not edited_df_for_compare.equals(current_display_df_for_compare):
         st.session_state.edited_log = True
-          
+        
         if selected_id == '--- แสดงทั้งหมด ---':
             st.session_state.log_data = edited_df.copy()
         else:
             # **FIX JUMPING**: ถ้ามีการเพิ่มแถวใหม่ขณะที่กรองอยู่ ให้เติม 'กลุ่มงาน' ให้โดยอัตโนมัติ
             edited_df['กลุ่มงาน'] = edited_df['กลุ่มงาน'].replace(['', np.nan, None], selected_id)
             
+            # 1. กรองข้อมูลที่ไม่ใช่กลุ่มงานปัจจุบันออก
             data_without_current_group = st.session_state.log_data[st.session_state.log_data['กลุ่มงาน'] != selected_id]
+            # 2. รวมข้อมูลที่ไม่ใช่กลุ่มงานปัจจุบันกับข้อมูลที่แก้ไขแล้ว (ที่อาจมีการเพิ่ม/ลบแถวแล้ว)
             st.session_state.log_data = pd.concat([data_without_current_group, edited_df], ignore_index=True)
 
-    # --- ปุ่ม Delete Selected Rows ---
-    col_del, col_space = st.columns([1, 4])
-    with col_del:
-        if st.button("🗑️ ลบแถวที่เลือก", type="secondary"):
-            # กรองเอาเฉพาะแถวที่ 'ลบ' เป็น False (คือเก็บไว้)
-            if 'ลบ' in st.session_state.log_data.columns:
-                # นับจำนวนที่จะลบ
-                rows_to_delete = st.session_state.log_data[st.session_state.log_data['ลบ'] == True].shape[0]
-                
-                if rows_to_delete > 0:
-                    # อัปเดตข้อมูลโดยตัดแถวที่เลือกออก
-                    st.session_state.log_data = st.session_state.log_data[st.session_state.log_data['ลบ'] == False]
-                    st.session_state.edited_log = True # ตั้งสถานะว่ามีการแก้ไขแล้ว
-                    st.success(f"ลบข้อมูลเรียบร้อยแล้ว {rows_to_delete} รายการ")
-                    st.rerun()
-                else:
-                    st.toast("กรุณาเลือกรายการที่ต้องการลบก่อนกดปุ่ม", icon="⚠️")
-
+    
     # --- ปุ่ม Save / Update (แก้ไขใหม่ให้ทำงานได้จริง) ---
+    # **ลบส่วนของปุ่ม "ลบแถวที่เลือก" ออกเนื่องจาก data_editor รองรับการลบโดยตรงแล้ว**
+    
     if st.button("Save / Update", type="primary"):
         
         # เตรียมข้อมูลสำหรับการบันทึก
@@ -343,7 +324,6 @@ with tab2:
         df_to_save = df_to_save.rename(columns=reverse_rename_map)
         
         # 4. Select columns และตรวจสอบให้แน่ใจว่าแปลงเป็น String ทั้งหมดก่อนส่ง
-        # ตัดคอลัมน์ 'ลบ' ออกก่อนส่งไป API
         columns_to_keep = list(LOG_KEYS.values())
         if not df_to_save.empty:
             # ตรวจสอบว่ามีคอลัมน์ครบหรือไม่
@@ -375,7 +355,7 @@ with tab2:
             error_msg = response.get('message') if response else 'API Error'
             st.error(f"❌ บันทึกข้อมูลล้มเหลว: {error_msg}")
             st.session_state.edited_log = True
-          
+            
 # --- แท็บ 1: คู่มือการประเมินความเสี่ยง ---
 with tab1:
     st.header("1. คู่มือการประเมินความเสี่ยงจากการทำงาน")
@@ -396,7 +376,7 @@ with tab3:
 
     if disabled_state:
         st.warning(f"**{disabled_text}** ก่อนเข้าถึงแท็บนี้")
-          
+        
     department_options = ["--- กรุณาเลือกหน่วยงาน ---"] + list(st.session_state.risk_mock_data.keys())
     
     selected_department = st.selectbox(
